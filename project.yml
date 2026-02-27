@@ -1,0 +1,51 @@
+name: ClipboardManager
+options:
+  bundleIdPrefix: com.clipboard
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "15.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+targets:
+  ClipboardManager:
+    type: application
+    platform: macOS
+    sources:
+      - path: ClipboardManager
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.clipboard.ClipboardManager
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: ClipboardManager/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ClipboardManager/Resources/ClipboardManager.entitlements
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_ALLOWED: true
+        GENERATE_INFOPLIST_FILE: false
+        COMBINE_HIDPI_IMAGES: true
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSET_CATALOG_COMPILER_APPICON_PATH: ClipboardManager/Resources/Assets.xcassets
+    entitlements:
+      path: ClipboardManager/Resources/ClipboardManager.entitlements
+
+  ClipboardManagerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: ClipboardManagerTests
+        excludes:
+          - "**/.DS_Store"
+    dependencies:
+      - target: ClipboardManager
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.clipboard.ClipboardManagerTests
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ClipboardManager.app/Contents/MacOS/ClipboardManager"
+        BUNDLE_LOADER: "$(TEST_HOST)"
