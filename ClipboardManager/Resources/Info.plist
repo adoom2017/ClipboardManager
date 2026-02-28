@@ -26,5 +26,11 @@
     <true/>
     <key>NSAppleEventsUsageDescription</key>
     <string>ClipboardManager 需要发送 Apple Events 来模拟粘贴操作（Cmd+V）。</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>ClipboardManager 需要访问本地网络，以便在局域网内的设备之间同步剪贴板内容。</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_clipmgr._tcp</string>
+    </array>
 </dict>
 </plist>

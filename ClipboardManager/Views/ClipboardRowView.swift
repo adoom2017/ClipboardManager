@@ -46,18 +46,34 @@ struct ClipboardRowView: View {
                 .help(clipboardItem.isPinned ? "取消置顶" : "置顶")
             }
 
-            // 快捷键索引（前9条）
-            if let index = shortcutIndex {
-                Text("⌘\(index)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.secondary.opacity(0.1))
-                    )
+            // 翻译按钮：hover 时显示，仅文本类型
+            if isHovered && clipboardItem.contentType == .text {
+                Button(action: {
+                    TranslationWindowController.shared.show(text: clipboardItem.content)
+                }) {
+                    Image(systemName: "globe")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .help("翻译")
+
+                // 手动同步按钮：hover 时显示，有在线设备时可用
+                if !SyncService.shared.activePeers.isEmpty && !SyncService.shared.isAutoSyncEnabled
+                    && clipboardItem.contentType == .text {
+                    Button(action: {
+                        SyncService.shared.syncItemToAll(clipboardItem)
+                    }) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .help("同步到所有设备")
+                }
             }
+
+            // 快捷键索引已移除（⌘1-⌘9 功能未实现）
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)

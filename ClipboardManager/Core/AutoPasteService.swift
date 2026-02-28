@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import ApplicationServices
 
 class AutoPasteService {
     static let shared = AutoPasteService()
@@ -44,6 +45,12 @@ class AutoPasteService {
     // MARK: - 自动粘贴
 
     func autoPaste(item: ClipboardItem) {
+        // 无辅助功能权限时，直接提示引导，不尝试粘贴
+        guard AXIsProcessTrusted() else {
+            showAccessibilityPermissionAlert()
+            return
+        }
+
         // 1. 根据类型写入剪贴板
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -109,7 +116,7 @@ class AutoPasteService {
         print("[AutoPaste] 所有粘贴方式都失败")
         if !hasShownPermissionHint {
             hasShownPermissionHint = true
-            showManualPasteHint()
+            showAccessibilityPermissionAlert()
         }
     }
 
@@ -157,19 +164,22 @@ class AutoPasteService {
         return true
     }
 
-    /// 仅在所有方式都失败时提示（每次会话最多一次）
-    private func showManualPasteHint() {
+    /// 引导用户授权辅助功能权限（启动检测 + 粘贴失败时调用）
+    func showAccessibilityPermissionAlert() {
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "自动粘贴失败"
-            alert.informativeText = "内容已复制到剪贴板，你可以使用 ⌘V 手动粘贴。\n\n如需自动粘贴，请执行以下操作：\n1. 打开「系统设置 → 隐私与安全性 → 辅助功能」\n2. 找到 ClipboardManager，先关闭再重新打开\n   （每次重新编译后需要重新切换）\n3. 重启 ClipboardManager"
-            alert.alertStyle = .informational
+            alert.messageText = "需要辅助功能权限"
+            alert.informativeText = "ClipboardManager 需要「辅助功能」权限才能自动粘贴内容。\n\n请按以下步骤授权：\n1. 点击「打开系统设置」\n2. 找到 ClipboardManager，打开开关\n3. 重启 ClipboardManager"
+            alert.alertStyle = .warning
             alert.addButton(withTitle: "打开系统设置")
-            alert.addButton(withTitle: "知道了")
+            alert.addButton(withTitle: "稍后再说")
 
+            NSApp.activate(ignoringOtherApps: true)
             let response = alert.runModal()
             if response == .alertFirstButtonReturn {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                NSWorkspace.shared.open(
+                    URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+                )
             }
         }
     }

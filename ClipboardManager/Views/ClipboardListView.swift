@@ -12,7 +12,7 @@ struct ClipboardListView: View {
                 ForEach(Array(viewModel.filteredItems.enumerated()), id: \.element.id) { index, item in
                     ClipboardRowView(
                         clipboardItem: item,
-                        shortcutIndex: index < 9 ? index + 1 : nil,
+                        shortcutIndex: nil,
                         isHovered: hoveredItemId == item.id,
                         onPin: { viewModel.togglePin(item) }
                     )
@@ -30,6 +30,20 @@ struct ClipboardListView: View {
                         if item.contentType == .text {
                             Button("粘贴为纯文本") {
                                 AutoPasteService.shared.pasteAsPlainText(content: item.content)
+                            }
+                            Button("翻译") {
+                                TranslationWindowController.shared.show(text: item.content)
+                            }
+                            // 手动同步（自动同步关闭时或主动推送）
+                            let peers = SyncService.shared.activePeers
+                            if !peers.isEmpty {
+                                Menu("同步到设备") {
+                                    ForEach(peers) { peer in
+                                        Button(peer.name) {
+                                            SyncService.shared.syncItem(item, to: peer.id)
+                                        }
+                                    }
+                                }
                             }
                         }
                         Divider()

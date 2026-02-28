@@ -26,6 +26,7 @@ class FloatingPanelController: NSPanel {
         let viewModel = ClipboardListViewModel()
         let hostingView = NSHostingView(rootView: MenuBarView(clipboardListViewModel: viewModel))
         hostingView.translatesAutoresizingMaskIntoConstraints = false
+        hostingView.sizingOptions = []
 
         // 用普通 NSView 做容器，避免 NSHostingView 直接作为 contentView
         // 时 AppKit 与 SwiftUI 布局系统互相触发 layoutSubtreeIfNeeded 的递归问题

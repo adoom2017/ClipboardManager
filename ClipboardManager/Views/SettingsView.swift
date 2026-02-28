@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
+    @StateObject private var syncViewModel = SyncViewModel()
     @ObservedObject var shortcutManager = KeyboardShortcutManager.shared
 
     var body: some View {
@@ -20,8 +21,18 @@ struct SettingsView: View {
                 .tabItem {
                     Label("隐私", systemImage: "lock.shield")
                 }
+
+            translationTab
+
+            SyncView(viewModel: syncViewModel)
+                .tabItem {
+                    Label("同步", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .tabItem {
+                    Label("翻译", systemImage: "globe")
+                }
         }
-        .frame(width: 420, height: 300)
+        .frame(width: 420, height: 360)
     }
 
     // MARK: - 通用设置
@@ -101,6 +112,46 @@ struct SettingsView: View {
                 .font(.callout)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Spacer()
+        }
+        .padding(20)
+    }
+
+    // MARK: - 翻译设置
+    private var translationTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("使用 OpenAI 兼容接口进行翻译，支持 OpenAI、DeepSeek、Groq、Ollama 等。")
+                .font(.callout)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 10, verticalSpacing: 10) {
+                GridRow {
+                    Text("API 地址:")
+                        .gridColumnAlignment(.trailing)
+                    TextField("https://api.openai.com/v1", text: $viewModel.translationAPIURL)
+                        .textFieldStyle(.roundedBorder)
+                }
+                GridRow {
+                    Text("API Key:")
+                        .gridColumnAlignment(.trailing)
+                    SecureField("sk-...", text: $viewModel.translationAPIKey)
+                        .textFieldStyle(.roundedBorder)
+                }
+                GridRow {
+                    Text("模型:")
+                        .gridColumnAlignment(.trailing)
+                    TextField("gpt-4o-mini", text: $viewModel.translationModel)
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
+
+            Text("示例：DeepSeek → https://api.deepseek.com/v1，模型 deepseek-chat\nGemini → https://generativelanguage.googleapis.com/v1beta，模型 gemini-2.0-flash")
+                .font(.caption)
+                .foregroundColor(.secondary)
 
             Spacer()
         }

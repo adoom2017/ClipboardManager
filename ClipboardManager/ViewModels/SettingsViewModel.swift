@@ -18,6 +18,17 @@ class SettingsViewModel: ObservableObject {
         didSet { UserDefaults.standard.set(isPrivacyGuardEnabled, forKey: "isPrivacyGuardEnabled") }
     }
 
+    // MARK: - 翻译设置
+    @Published var translationAPIURL: String {
+        didSet { UserDefaults.standard.set(translationAPIURL, forKey: "translationAPIURL") }
+    }
+    @Published var translationAPIKey: String {
+        didSet { UserDefaults.standard.set(translationAPIKey, forKey: "translationAPIKey") }
+    }
+    @Published var translationModel: String {
+        didSet { UserDefaults.standard.set(translationModel, forKey: "translationModel") }
+    }
+
     init() {
         let defaults = UserDefaults.standard
         self.maxHistoryCount = defaults.object(forKey: "maxHistoryCount") as? Int ?? 100
@@ -25,6 +36,9 @@ class SettingsViewModel: ObservableObject {
         self.isPrivacyModeEnabled = defaults.bool(forKey: "isPrivacyModeEnabled")
         self.isClipboardHistoryEnabled = defaults.object(forKey: "isClipboardHistoryEnabled") as? Bool ?? true
         self.isPrivacyGuardEnabled = defaults.bool(forKey: "isPrivacyGuardEnabled")
+        self.translationAPIURL = defaults.string(forKey: "translationAPIURL") ?? "https://api.openai.com/v1"
+        self.translationAPIKey = defaults.string(forKey: "translationAPIKey") ?? ""
+        self.translationModel = defaults.string(forKey: "translationModel") ?? "gpt-4o-mini"
     }
 
     func clearHistory() {
@@ -37,5 +51,8 @@ class SettingsViewModel: ObservableObject {
         isPrivacyModeEnabled = false
         isClipboardHistoryEnabled = true
         isPrivacyGuardEnabled = false
+        translationAPIURL = "https://api.openai.com/v1"
+        translationAPIKey = ""
+        translationModel = "gpt-4o-mini"
     }
 }
