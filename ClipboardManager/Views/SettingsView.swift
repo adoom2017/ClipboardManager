@@ -23,13 +23,13 @@ struct SettingsView: View {
                 }
 
             translationTab
+                .tabItem {
+                    Label("翻译", systemImage: "globe")
+                }
 
             SyncView(viewModel: syncViewModel)
                 .tabItem {
                     Label("同步", systemImage: "arrow.triangle.2.circlepath")
-                }
-                .tabItem {
-                    Label("翻译", systemImage: "globe")
                 }
         }
         .frame(width: 420, height: 360)

@@ -30,13 +30,14 @@ MVVM + singleton service layer. SwiftUI handles all views; AppKit handles the me
 
 ```
 App/          → @main SwiftUI entry + NSApplicationDelegate
-Core/         → Singleton services (monitor, paste, privacy)
+Core/         → Singleton services (monitor, paste, privacy, translation)
 Models/       → ClipboardItem (Codable struct)
 Storage/      → In-memory store + JSON persistence
-ViewModels/   → ClipboardListViewModel, SettingsViewModel
-Views/        → SwiftUI views
+ViewModels/   → ClipboardListViewModel, SettingsViewModel, SyncViewModel
+Views/        → SwiftUI views (+ TranslationWindowView, SyncView)
 Utilities/    → Constants, global hotkey (Carbon API), floating panel
 Extensions/   → NSPasteboard+, String+
+Sync/         → LAN sync: discovery (mDNS), connection, crypto (CryptoKit AES), messages
 ```
 
 Data flow: `ClipboardMonitor` polls `NSPasteboard` every 0.5s → filters via `PrivacyGuard` → stores in `ClipboardStore` → Combine publishers drive `ClipboardListViewModel` → SwiftUI re-renders.
@@ -47,7 +48,7 @@ Persistence: JSON at `~/Library/Application Support/ClipboardManager/clipboard_h
 
 **Project configuration via XcodeGen:** Never edit `.xcodeproj` directly. All project structure changes go in `project.yml`, then run `xcodegen generate`.
 
-**Singletons accessed via `.shared`:** `ClipboardMonitor.shared`, `ClipboardStore.shared`, `AutoPasteService.shared`, `FloatingPanelController.shared`, `KeyboardShortcutManager.shared`.
+**Singletons accessed via `.shared`:** `ClipboardMonitor.shared`, `ClipboardStore.shared`, `AutoPasteService.shared`, `FloatingPanelController.shared`, `KeyboardShortcutManager.shared`, `SyncService.shared`. `PrivacyGuard` is stateless — instantiate directly, no singleton.
 
 **Code signing disabled:** `CODE_SIGNING_ALLOWED: false` and `CODE_SIGN_IDENTITY: "-"` — no certificates needed for local development.
 
@@ -64,3 +65,13 @@ Persistence: JSON at `~/Library/Application Support/ClipboardManager/clipboard_h
 **Privacy filtering:** `PrivacyGuard` blocks by source app name (case-insensitive) and content keywords (`password`, `secret`, `token`, `api_key`, `private_key`). Edit blocklists directly in `PrivacyGuard.swift`.
 
 **`PreviewPopover`** is implemented but not wired into any view — available for integration.
+
+**Use `LazyVStack` inside `ScrollView`, never SwiftUI `List`:** `List` wraps `NSTableView` which crashes inside `MenuBarExtra`. All clipboard list rendering uses `ScrollView + LazyVStack`.
+
+**`FloatingPanelController` owns its own `ClipboardListViewModel` instance**, separate from the `MenuBarExtra` view hierarchy. Changes to shared state go through `ClipboardStore`, not directly through a ViewModel.
+
+**Sync feature** (`Sync/`): LAN peer discovery via mDNS (`SyncDiscovery`), PIN-based pairing handshake, AES-encrypted messages (`SyncCrypto`), and manual/auto sync modes. Pair management and routing live in `SyncService.shared`.
+
+**Translation feature** (`Core/TranslationService.swift`): Calls a user-configurable OpenAI-compatible endpoint. Settings (URL, API key, model) are stored in `SettingsViewModel`. Results display in a separate floating window via `TranslationWindowController`.
+
+**Test isolation:** Pass `inMemory: true` to `ClipboardStore` (or `PersistenceController`) in test `setUp` to avoid touching the real JSON file on disk.
