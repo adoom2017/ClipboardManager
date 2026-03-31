@@ -105,6 +105,9 @@ class SyncService: ObservableObject {
         let nwConn = discovery.connect(to: peer)
         let conn = SyncConnection(connection: nwConn, peerID: "", peerName: peer.name)
         setupConnectionHandlers(conn)
+        DispatchQueue.main.async {
+            self.pendingPairingConnection = conn
+        }
         conn.start()
 
         // 发送 hello + 配对请求
