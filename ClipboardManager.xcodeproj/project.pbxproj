@@ -13,6 +13,7 @@
 		170FC7E47AAEDC7AD8FA6504 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81DF4E8607A747D258DFCBEE /* SettingsView.swift */; };
 		1D89A311D8A86F34CA6A875C /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECB8C455934594C15E8D0DCE /* MenuBarView.swift */; };
 		248A49C5E89914140957E544 /* SyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2D6AB34BF19967BF51DCE42 /* SyncService.swift */; };
+		28E58A9E1A9629F706E88481 /* LaunchAtLoginManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BF410ECB9078E5CC93AA881 /* LaunchAtLoginManager.swift */; };
 		2C7785AB81FCCA73F6393DE3 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CBAAD7AFED846FB97DFFAB /* AppDelegate.swift */; };
 		2D1F991D2379ECB70F63A3BC /* ClipboardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D1C90E679858C8E2291F924 /* ClipboardStore.swift */; };
 		2F42F7AF2E75E73BCC4F4114 /* ClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCB2ABF51DA4B722473703BC /* ClipboardMonitor.swift */; };
@@ -77,6 +78,7 @@
 		8EFF0323C9231B8CCC76E673 /* FloatingPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanelController.swift; sourceTree = "<group>"; };
 		98685ECF11ADA28BD6E3E16F /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
 		99EE65770B43573F4EDDB2B7 /* ClipboardListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardListView.swift; sourceTree = "<group>"; };
+		9BF410ECB9078E5CC93AA881 /* LaunchAtLoginManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginManager.swift; sourceTree = "<group>"; };
 		9C9F37ED65822AE35B96FB98 /* ClipboardRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardRowView.swift; sourceTree = "<group>"; };
 		A2D6AB34BF19967BF51DCE42 /* SyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncService.swift; sourceTree = "<group>"; };
 		A76F418929B6CC8594D65341 /* String+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Extensions.swift"; sourceTree = "<group>"; };
@@ -103,6 +105,7 @@
 				14D474E701D96DF77A8A510D /* Constants.swift */,
 				8EFF0323C9231B8CCC76E673 /* FloatingPanelController.swift */,
 				8E44A2778B18B12609CFF04A /* KeyboardShortcutManager.swift */,
+				9BF410ECB9078E5CC93AA881 /* LaunchAtLoginManager.swift */,
 				84FFFC640F5B40A9CABADDDA /* TranslationWindowController.swift */,
 			);
 			path = Utilities;
@@ -293,9 +296,10 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+				};
 			};
 			buildConfigurationList = 5A91224300EDB9050FF8B28A /* Build configuration list for PBXProject "ClipboardManager" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -305,6 +309,7 @@
 			mainGroup = 8D347D721165682FE77CF542;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 10B01EF04AA2275D46EEBB4B /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -352,6 +357,7 @@
 				C1D10B80C6851A88F5B1D7BD /* Constants.swift in Sources */,
 				076A405BC0A7E37FA71A13C7 /* FloatingPanelController.swift in Sources */,
 				C0FF5B2D96D8B8D6D9D547A6 /* KeyboardShortcutManager.swift in Sources */,
+				28E58A9E1A9629F706E88481 /* LaunchAtLoginManager.swift in Sources */,
 				1D89A311D8A86F34CA6A875C /* MenuBarView.swift in Sources */,
 				41A05E8C5674A771A2ECDF90 /* NSPasteboard+Extensions.swift in Sources */,
 				B6A719023C4526618F70C30D /* PersistenceController.swift in Sources */,

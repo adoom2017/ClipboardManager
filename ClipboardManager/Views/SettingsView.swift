@@ -4,6 +4,7 @@ struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @StateObject private var syncViewModel = SyncViewModel()
     @ObservedObject var shortcutManager = KeyboardShortcutManager.shared
+    @State private var showLaunchAtLoginError = false
 
     var body: some View {
         TabView {
@@ -33,12 +34,30 @@ struct SettingsView: View {
                 }
         }
         .frame(width: 420, height: 360)
+        .alert("无法更新开机启动", isPresented: $showLaunchAtLoginError) {
+            Button("确定") {
+                viewModel.clearLaunchAtLoginError()
+            }
+        } message: {
+            Text(viewModel.launchAtLoginErrorMessage ?? "请稍后重试。")
+        }
+        .onChange(of: viewModel.launchAtLoginErrorMessage) {
+            showLaunchAtLoginError = viewModel.launchAtLoginErrorMessage != nil
+        }
     }
 
     // MARK: - 通用设置
     private var generalTab: some View {
         VStack(alignment: .leading, spacing: 16) {
             Toggle("启用剪贴板历史记录", isOn: $viewModel.isClipboardHistoryEnabled)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("开机时自动启动", isOn: $viewModel.launchAtLoginEnabled)
+                Text(viewModel.launchAtLoginHint)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack {
                 Text("最大历史条数:")
