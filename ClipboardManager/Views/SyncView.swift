@@ -32,7 +32,7 @@ struct SyncView: View {
             } else {
                 List(viewModel.discoveredPeers) { peer in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(peer.name)
+                        Text(peer.displayName)
                             .font(.body)
                         if let host = peer.host, let port = peer.port {
                             Text("\(host):\(port)")

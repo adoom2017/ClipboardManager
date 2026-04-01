@@ -22,12 +22,14 @@ class SyncDiscovery: ObservableObject {
 
     /// 本机 Bonjour 服务名（= localID），用于过滤自身
     private let localServiceName: String
+    private let localDisplayName: String
 
     /// 发现新连接入站时回调（接收方）
     var onIncomingConnection: ((NWConnection) -> Void)?
 
     init(localServiceName: String) {
         self.localServiceName = localServiceName
+        self.localDisplayName = Host.current().localizedName ?? "Mac"
     }
 
     // MARK: - 启动
@@ -64,14 +66,19 @@ class SyncDiscovery: ObservableObject {
 
     private func startListener(port: NWEndpoint.Port) {
         let params = NWParameters.tcp
-        params.includePeerToPeer = true
 
         guard let listener = try? NWListener(using: params, on: port) else {
             log(.error, "failed to create NWListener")
             scheduleRestart(reason: "listener create failed")
             return
         }
-        listener.service = NWListener.Service(name: localServiceName, type: Self.serviceType)
+        var service = NWListener.Service(name: localServiceName, type: Self.serviceType)
+        service.txtRecordObject = NWTXTRecord([
+            "id": localServiceName,
+            "name": localDisplayName,
+            "ver": "1"
+        ])
+        listener.service = service
 
         listener.newConnectionHandler = { [weak self] connection in
             self?.log(.debug, "incoming connection endpoint=\(connection.endpoint)")
@@ -99,19 +106,26 @@ class SyncDiscovery: ObservableObject {
 
     private func startBrowser() {
         let params = NWParameters()
-        params.includePeerToPeer = true
-        let browser = NWBrowser(for: .bonjour(type: Self.serviceType, domain: Self.serviceDomain), using: params)
+        let browser = NWBrowser(for: .bonjourWithTXTRecord(type: Self.serviceType, domain: Self.serviceDomain), using: params)
 
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             guard let self else { return }
             let peers = results.compactMap { result -> DiscoveredPeer? in
                 guard case .service(let name, _, _, _) = result.endpoint else { return nil }
+                let txtRecord: NWTXTRecord?
+                if case .bonjour(let record) = result.metadata {
+                    txtRecord = record
+                } else {
+                    txtRecord = nil
+                }
+                let peerID = txtRecord?["id"] ?? name
+                let displayName = txtRecord?["name"] ?? name
                 // 过滤掉自身广播的服务
-                guard name != self.localServiceName else { return nil }
-                return DiscoveredPeer(name: name, endpoint: result.endpoint, host: nil, port: nil)
+                guard !self.isLocalPeerID(peerID) else { return nil }
+                return DiscoveredPeer(peerID: peerID, displayName: displayName, endpoint: result.endpoint, host: nil, port: nil)
             }
             self.log(.debug, "browse results count=\(results.count) peers=\(peers.map(\.name).joined(separator: ","))")
-            self.bonjourPeers = Dictionary(uniqueKeysWithValues: peers.map { ($0.name, $0) })
+            self.bonjourPeers = Dictionary(uniqueKeysWithValues: peers.map { ($0.peerID, $0) })
             self.publishMergedPeers()
         }
         browser.stateUpdateHandler = { [weak self] state in
@@ -136,16 +150,15 @@ class SyncDiscovery: ObservableObject {
 
     func connect(to peer: DiscoveredPeer) -> NWConnection {
         let params = NWParameters.tcp
-        params.includePeerToPeer = true
         if let host = peer.host, let port = peer.port {
-            log(.info, "connect to peer=\(peer.name) host=\(host) port=\(port) via=broadcast")
+            log(.info, "connect to peer=\(peer.displayName) peerID=\(peer.peerID) host=\(host) port=\(port) via=broadcast")
             return NWConnection(
                 host: NWEndpoint.Host(host),
                 port: NWEndpoint.Port(integerLiteral: NWEndpoint.Port.IntegerLiteralType(port)),
                 using: params
             )
         }
-        log(.info, "connect to peer=\(peer.name) endpoint=\(peer.endpoint.debugDescription) via=bonjour")
+        log(.info, "connect to peer=\(peer.displayName) peerID=\(peer.peerID) endpoint=\(peer.endpoint.debugDescription) via=bonjour")
         if let endpoint = peer.endpoint {
             return NWConnection(to: endpoint, using: params)
         }
@@ -172,14 +185,14 @@ class SyncDiscovery: ObservableObject {
         log(.info, "starting broadcast discovery localID=\(localServiceName) port=\(portValue)")
         let discovery = SyncBroadcastDiscovery(
             localID: localServiceName,
-            localName: Host.current().localizedName ?? "Mac",
+            localName: localDisplayName,
             serverPort: Int(portValue)
         )
         discovery.onPeerDiscovered = { [weak self] peer in
             guard let self else { return }
-            self.log(.debug, "broadcast peer discovered id=\(peer.name) host=\(peer.host ?? "") port=\(peer.port ?? 0)")
-            self.broadcastPeers[peer.name] = peer
-            self.broadcastPeerLastSeen[peer.name] = Date()
+            self.log(.debug, "broadcast peer discovered id=\(peer.peerID) displayName=\(peer.displayName) host=\(peer.host ?? "") port=\(peer.port ?? 0)")
+            self.broadcastPeers[peer.peerID] = peer
+            self.broadcastPeerLastSeen[peer.peerID] = Date()
             self.publishMergedPeers()
         }
         discovery.start()
@@ -192,26 +205,38 @@ class SyncDiscovery: ObservableObject {
     }
 
     private func publishMergedPeers() {
-        let merged = Array(Set(bonjourPeers.keys).union(broadcastPeers.keys)).compactMap { peerName -> DiscoveredPeer? in
-            let bonjourPeer = bonjourPeers[peerName]
-            let broadcastPeer = broadcastPeers[peerName]
+        let merged = Array(Set(bonjourPeers.keys).union(broadcastPeers.keys)).compactMap { peerID -> DiscoveredPeer? in
+            guard !isLocalPeerID(peerID) else { return nil }
+            let bonjourPeer = bonjourPeers[peerID]
+            let broadcastPeer = broadcastPeers[peerID]
             guard bonjourPeer != nil || broadcastPeer != nil else { return nil }
             return DiscoveredPeer(
-                name: peerName,
+                peerID: peerID,
+                displayName: broadcastPeer?.displayName ?? bonjourPeer?.displayName ?? peerID,
                 endpoint: bonjourPeer?.endpoint,
                 host: broadcastPeer?.host ?? bonjourPeer?.host,
                 port: broadcastPeer?.port ?? bonjourPeer?.port
             )
         }
-        let mergedNames = Set(merged.map(\.name))
+        let mergedNames = Set(merged.map(\.peerID))
         let newlyDiscovered = mergedNames.subtracting(lastPublishedPeerNames)
-        for name in newlyDiscovered.sorted() {
-            log(.info, "discovered peer name=\(name)")
+        for peerID in newlyDiscovered.sorted() {
+            let displayName = merged.first(where: { $0.peerID == peerID })?.displayName ?? peerID
+            log(.info, "discovered peer displayName=\(displayName) peerID=\(peerID)")
         }
         lastPublishedPeerNames = mergedNames
         DispatchQueue.main.async {
-            self.discoveredPeers = merged.sorted { $0.name < $1.name }
+            self.discoveredPeers = merged.sorted {
+                if $0.displayName == $1.displayName {
+                    return $0.peerID < $1.peerID
+                }
+                return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            }
         }
+    }
+
+    private func isLocalPeerID(_ peerID: String) -> Bool {
+        peerID.caseInsensitiveCompare(localServiceName) == .orderedSame
     }
 
     private func startBroadcastCleanupTimer() {
@@ -264,14 +289,16 @@ class SyncDiscovery: ObservableObject {
 // MARK: - DiscoveredPeer
 
 struct DiscoveredPeer: Identifiable, Equatable {
-    let id = UUID()
-    let name: String
+    let peerID: String
+    let displayName: String
     let endpoint: NWEndpoint?
     let host: String?
     let port: Int?
+    var id: String { peerID }
+    var name: String { displayName }
 
     static func == (lhs: DiscoveredPeer, rhs: DiscoveredPeer) -> Bool {
-        lhs.name == rhs.name
+        lhs.peerID == rhs.peerID
     }
 }
 
@@ -432,7 +459,8 @@ private final class SyncBroadcastDiscovery {
         let senderIP = String(cString: inet_ntoa(sender.sin_addr))
         let host = (object["host"] as? String).flatMap { Self.isPrivateIPv4($0) ? $0 : nil } ?? senderIP
         log(.debug, "broadcast packet received id=\(id) host=\(host) sender=\(senderIP) port=\(port)")
-        let peer = DiscoveredPeer(name: id, endpoint: nil, host: host, port: port)
+        let displayName = (object["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? host
+        let peer = DiscoveredPeer(peerID: id, displayName: displayName, endpoint: nil, host: host, port: port)
         onPeerDiscovered?(peer)
     }
 

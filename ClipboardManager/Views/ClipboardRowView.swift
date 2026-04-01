@@ -93,11 +93,11 @@ struct ClipboardRowView: View {
                     .font(.caption)
             }
             .buttonStyle(.plain)
-            .help("同步到 \(peer.name)")
+            .help("同步到 \(peer.displayName)")
         } else if !peers.isEmpty {
             Menu {
                 ForEach(peers) { peer in
-                    Button(peer.name) {
+                    Button(peer.displayName) {
                         syncService.syncItem(clipboardItem, to: peer)
                     }
                 }

@@ -39,7 +39,7 @@ struct ClipboardListView: View {
                             if !peers.isEmpty {
                                 Menu("同步到设备") {
                                     ForEach(peers) { peer in
-                                        Button(peer.name) {
+                                        Button(peer.displayName) {
                                             SyncService.shared.syncItem(item, to: peer)
                                         }
                                     }
