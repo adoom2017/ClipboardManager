@@ -70,10 +70,12 @@ class SyncService: ObservableObject {
     // MARK: - 启动
 
     func start() {
+        log("start localID=\(localID) localName=\(localName)")
         discovery.start()
     }
 
     func stop() {
+        log("stop")
         discovery.stop()
         activePeers.forEach { $0.connection.cancel() }
         activePeers.removeAll()
@@ -93,6 +95,7 @@ class SyncService: ObservableObject {
     // MARK: - 配对 - 发起方（输入 PIN 后调用）
 
     func confirmPairing(connection: SyncConnection, peerID: String, peerName: String, pin: String) {
+        log("confirmPairing peerID=\(peerID) peerName=\(peerName) pin=\(pin)")
         let pinData = Data(pin.utf8)
         var msg = SyncMessage(type: .pairingPin, senderID: localID, senderName: localName)
         msg.plainPayload = pinData
@@ -102,6 +105,7 @@ class SyncService: ObservableObject {
     // MARK: - 连接新的对端（发起方）
 
     func connect(to peer: DiscoveredPeer) {
+        log("connect requested peer=\(peer.name)")
         let nwConn = discovery.connect(to: peer)
         let conn = SyncConnection(connection: nwConn, peerID: "", peerName: peer.name)
         setupConnectionHandlers(conn)
@@ -134,6 +138,7 @@ class SyncService: ObservableObject {
     }
 
     func disconnectPeer(id: String) {
+        log("disconnectPeer id=\(id)")
         if let idx = activePeers.firstIndex(where: { $0.id == id }) {
             activePeers[idx].connection.cancel()
             activePeers.remove(at: idx)
@@ -141,6 +146,7 @@ class SyncService: ObservableObject {
     }
 
     func removePairedPeer(id: String) {
+        log("removePairedPeer id=\(id)")
         disconnectPeer(id: id)
         pairedPeers.removeAll { $0.id == id }
         savePairedPeers()
@@ -167,11 +173,13 @@ class SyncService: ObservableObject {
             self?.handle(message: message, from: conn)
         }
         conn.onDisconnect = { [weak self] c in
+            self?.log("connection disconnected peerID=\(c.peerID) peerName=\(c.peerName)")
             self?.activePeers.removeAll { $0.id == c.peerID }
         }
     }
 
     private func handle(message: SyncMessage, from conn: SyncConnection) {
+        log("handle type=\(message.type.rawValue) senderID=\(message.senderID) senderName=\(message.senderName)")
         switch message.type {
         case .hello:
             break
@@ -204,7 +212,7 @@ class SyncService: ObservableObject {
                             pin: pin, connection: conn, sendAck: false)
 
         case .pairingReject:
-            print("[SyncService] 配对被拒绝")
+            log("pairing rejected by senderID=\(message.senderID)")
 
         case .items:
             guard let paired = pairedPeers.first(where: { $0.id == message.senderID }),
@@ -223,6 +231,7 @@ class SyncService: ObservableObject {
 
     private func finalizePairing(peerID: String, peerName: String, pin: String,
                                   connection: SyncConnection, sendAck: Bool) {
+        log("finalizePairing peerID=\(peerID) peerName=\(peerName) sendAck=\(sendAck)")
         let key = SyncCrypto.deriveKey(pin: pin, localID: localID, remoteID: peerID)
         let peer = SyncPeer(id: peerID, name: peerName, keyData: key.withUnsafeBytes { Data($0) })
         pairedPeers.removeAll { $0.id == peerID }
@@ -305,5 +314,9 @@ class SyncService: ObservableObject {
         guard let data = UserDefaults.standard.data(forKey: "syncPairedPeers"),
               let peers = try? JSONDecoder().decode([SyncPeer].self, from: data) else { return }
         pairedPeers = peers
+    }
+
+    private func log(_ message: String) {
+        print("[SyncService] \(message)")
     }
 }
