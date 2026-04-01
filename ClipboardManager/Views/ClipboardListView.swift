@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ClipboardListView: View {
     @ObservedObject var viewModel: ClipboardListViewModel
+    @ObservedObject private var syncService = SyncService.shared
     @State private var hoveredItemId: UUID?
 
     var body: some View {
@@ -58,6 +59,23 @@ struct ClipboardListView: View {
                 }
             }
             .padding(.vertical, 4)
+        }
+        .alert(
+            "同步失败",
+            isPresented: Binding(
+                get: { syncService.syncErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        syncService.clearSyncError()
+                    }
+                }
+            )
+        ) {
+            Button("确定") {
+                syncService.clearSyncError()
+            }
+        } message: {
+            Text(syncService.syncErrorMessage ?? "同步失败，请稍后重试。")
         }
     }
 }

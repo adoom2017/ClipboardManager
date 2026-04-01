@@ -16,6 +16,8 @@ class SyncDiscovery: ObservableObject {
     private var restartWorkItem: DispatchWorkItem?
     private var bonjourPeers: [String: DiscoveredPeer] = [:]
     private var broadcastPeers: [String: DiscoveredPeer] = [:]
+    private var broadcastPeerLastSeen: [String: Date] = [:]
+    private var broadcastCleanupTimer: DispatchSourceTimer?
     private var lastPublishedPeerNames = Set<String>()
 
     /// 本机 Bonjour 服务名（= localID），用于过滤自身
@@ -49,8 +51,11 @@ class SyncDiscovery: ObservableObject {
         browser = nil
         broadcastDiscovery?.stop()
         broadcastDiscovery = nil
+        broadcastCleanupTimer?.cancel()
+        broadcastCleanupTimer = nil
         bonjourPeers.removeAll()
         broadcastPeers.removeAll()
+        broadcastPeerLastSeen.removeAll()
         lastPublishedPeerNames.removeAll()
         DispatchQueue.main.async { self.discoveredPeers = [] }
     }
@@ -174,10 +179,12 @@ class SyncDiscovery: ObservableObject {
             guard let self else { return }
             self.log(.debug, "broadcast peer discovered id=\(peer.name) host=\(peer.host ?? "") port=\(peer.port ?? 0)")
             self.broadcastPeers[peer.name] = peer
+            self.broadcastPeerLastSeen[peer.name] = Date()
             self.publishMergedPeers()
         }
         discovery.start()
         broadcastDiscovery = discovery
+        startBroadcastCleanupTimer()
     }
 
     func boostActivity() {
@@ -205,6 +212,31 @@ class SyncDiscovery: ObservableObject {
         DispatchQueue.main.async {
             self.discoveredPeers = merged.sorted { $0.name < $1.name }
         }
+    }
+
+    private func startBroadcastCleanupTimer() {
+        broadcastCleanupTimer?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        timer.schedule(deadline: .now() + 5.0, repeating: 5.0)
+        timer.setEventHandler { [weak self] in
+            self?.pruneExpiredBroadcastPeers()
+        }
+        timer.resume()
+        broadcastCleanupTimer = timer
+    }
+
+    private func pruneExpiredBroadcastPeers() {
+        let cutoff = Date().addingTimeInterval(-45)
+        let expiredNames = broadcastPeerLastSeen.compactMap { name, lastSeen in
+            lastSeen < cutoff ? name : nil
+        }
+        guard !expiredNames.isEmpty else { return }
+        for name in expiredNames {
+            broadcastPeerLastSeen.removeValue(forKey: name)
+            broadcastPeers.removeValue(forKey: name)
+            log(.info, "expired stale broadcast peer name=\(name)")
+        }
+        publishMergedPeers()
     }
 
     private func scheduleRestart(reason: String) {

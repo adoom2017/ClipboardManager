@@ -14,6 +14,8 @@ class SyncConnection {
     var onDisconnect: ((SyncConnection) -> Void)?
     /// 连接就绪时回调
     var onReady: ((SyncConnection) -> Void)?
+    /// 连接失败时回调
+    var onFailure: ((SyncConnection, Error?) -> Void)?
 
     private var receiveBuffer = Data()
 
@@ -35,7 +37,10 @@ class SyncConnection {
                 self.receiveNextFrame()
             case .failed(let error):
                 self.log(.error, "failed peerName=\(self.peerName) error=\(error)")
-                DispatchQueue.main.async { self.onDisconnect?(self) }
+                DispatchQueue.main.async {
+                    self.onFailure?(self, error)
+                    self.onDisconnect?(self)
+                }
             case .cancelled:
                 DispatchQueue.main.async { self.onDisconnect?(self) }
             default:

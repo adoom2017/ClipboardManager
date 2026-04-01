@@ -6,6 +6,7 @@ class SyncService: ObservableObject {
     static let shared = SyncService()
 
     @Published var discoveredPeers: [DiscoveredPeer] = []
+    @Published var syncErrorMessage: String?
 
     private let localID: String
     private let localName: String
@@ -37,25 +38,60 @@ class SyncService: ObservableObject {
         discovery.stop()
     }
 
+    func clearSyncError() {
+        syncErrorMessage = nil
+    }
+
     func syncItem(_ item: ClipboardItem, to peer: DiscoveredPeer) {
         guard item.contentType == .text else { return }
+        clearSyncError()
         log(.info, "syncItem itemID=\(item.id.uuidString) peer=\(peer.name)")
 
         let nwConnection = discovery.connect(to: peer)
         let connection = SyncConnection(connection: nwConnection, peerID: peer.name, peerName: peer.name)
+        var didComplete = false
+        let timeout = DispatchWorkItem { [weak self, weak connection] in
+            guard let self, !didComplete else { return }
+            didComplete = true
+            self.log(.warn, "sync timeout itemID=\(item.id.uuidString) peer=\(peer.name)")
+            self.syncErrorMessage = "同步到 \(peer.name) 超时，请确认设备在线后重试。"
+            connection?.cancel()
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: timeout)
         connection.onReady = { [weak self, weak connection] readyConnection in
             guard let self, let connection else { return }
             let hello = SyncMessage(type: .hello, senderID: self.localID, senderName: self.localName)
             connection.send(message: hello)
             self.sendItems([item], via: readyConnection)
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.2) {
-                connection.cancel()
-            }
         }
         connection.onDisconnect = { [weak self] disconnected in
-            self?.log(.debug, "connection disconnected peerID=\(disconnected.peerID) peerName=\(disconnected.peerName)")
+            guard let self else { return }
+            if didComplete {
+                self.log(.debug, "connection disconnected peerID=\(disconnected.peerID) peerName=\(disconnected.peerName)")
+                return
+            }
+            didComplete = true
+            timeout.cancel()
+            self.log(.warn, "sync disconnected before ack peerID=\(disconnected.peerID) peerName=\(disconnected.peerName)")
+            self.syncErrorMessage = "同步到 \(peer.name) 失败，请稍后重试。"
+        }
+        connection.onFailure = { [weak self] failedConnection, error in
+            guard let self, !didComplete else { return }
+            didComplete = true
+            timeout.cancel()
+            self.log(.warn, "sync failed peerID=\(failedConnection.peerID) peerName=\(failedConnection.peerName) error=\(String(describing: error))")
+            self.syncErrorMessage = "无法连接到 \(peer.name)，请确认设备在线后重试。"
         }
         connection.onMessage = { [weak self] message in
+            if message.type == .ack {
+                guard !didComplete else { return }
+                didComplete = true
+                timeout.cancel()
+                self?.log(.info, "sync acknowledged itemID=\(item.id.uuidString) peer=\(peer.name)")
+                connection.cancel()
+                return
+            }
             self?.handle(message: message, from: connection)
         }
         connection.start()
@@ -89,9 +125,13 @@ class SyncService: ObservableObject {
             }
             log(.info, "decoded \(payload.items.count) synced item(s) from senderID=\(message.senderID)")
             receiveItems(payload.items)
-            connection.cancel()
+            let ack = SyncMessage(type: .ack, senderID: localID, senderName: localName)
+            connection.send(message: ack)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                connection.cancel()
+            }
         case .ack:
-            connection.cancel()
+            break
         case .ping:
             let pong = SyncMessage(type: .pong, senderID: localID, senderName: localName)
             connection.send(message: pong)
