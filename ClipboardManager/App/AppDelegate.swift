@@ -6,6 +6,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var clipboardMonitor: ClipboardMonitor?
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        AppLogger.shared.start()
+
         // 初始化自动粘贴服务（开始跟踪前台应用）
         _ = AutoPasteService.shared
 

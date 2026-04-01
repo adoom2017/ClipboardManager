@@ -30,6 +30,7 @@
 		B0FC6DF42BAEC11027002161 /* SyncConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B754B23E1AD7A22093AF78 /* SyncConnection.swift */; };
 		B3F9ACD1F92FC086C4884968 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98685ECF11ADA28BD6E3E16F /* TranslationService.swift */; };
 		B6A719023C4526618F70C30D /* PersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B969B2ABCD617824782EF2 /* PersistenceController.swift */; };
+		BF1B7E2A75D07417072200D4 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7285404D679E501D67DF27B8 /* AppLogger.swift */; };
 		C0FF5B2D96D8B8D6D9D547A6 /* KeyboardShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E44A2778B18B12609CFF04A /* KeyboardShortcutManager.swift */; };
 		C1D10B80C6851A88F5B1D7BD /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D474E701D96DF77A8A510D /* Constants.swift */; };
 		C327ECF98656610A0FF96399 /* PreviewPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A89DA0BDE903B74072993C /* PreviewPopover.swift */; };
@@ -66,6 +67,7 @@
 		609A9A2CCE9FAF12989D5DCB /* SyncCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncCrypto.swift; sourceTree = "<group>"; };
 		61849F71CB716EBC3729A7E1 /* ClipboardItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItem.swift; sourceTree = "<group>"; };
 		6695270D1A1CCBC70D19A3FD /* ClipboardStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardStoreTests.swift; sourceTree = "<group>"; };
+		7285404D679E501D67DF27B8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		72CC7BF74BC3A9F7182565B8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8078E6EA338E3BBF74F121F9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		81DF4E8607A747D258DFCBEE /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -102,6 +104,7 @@
 		073EEC58720B88F820107160 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				7285404D679E501D67DF27B8 /* AppLogger.swift */,
 				14D474E701D96DF77A8A510D /* Constants.swift */,
 				8EFF0323C9231B8CCC76E673 /* FloatingPanelController.swift */,
 				8E44A2778B18B12609CFF04A /* KeyboardShortcutManager.swift */,
@@ -346,6 +349,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C7785AB81FCCA73F6393DE3 /* AppDelegate.swift in Sources */,
+				BF1B7E2A75D07417072200D4 /* AppLogger.swift in Sources */,
 				F36C2D8352A8A85E1ABB361D /* AutoPasteService.swift in Sources */,
 				F280C0773CE34FA3F6C59373 /* ClipboardItem.swift in Sources */,
 				A4EEBFE9C81982FAB15B85BD /* ClipboardListView.swift in Sources */,

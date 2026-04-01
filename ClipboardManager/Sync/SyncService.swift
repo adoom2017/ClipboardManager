@@ -28,18 +28,18 @@ class SyncService: ObservableObject {
     }
 
     func start() {
-        log("start localID=\(localID) localName=\(localName)")
+        log(.info, "start localID=\(localID) localName=\(localName)")
         discovery.start()
     }
 
     func stop() {
-        log("stop")
+        log(.info, "stop")
         discovery.stop()
     }
 
     func syncItem(_ item: ClipboardItem, to peer: DiscoveredPeer) {
         guard item.contentType == .text else { return }
-        log("syncItem itemID=\(item.id.uuidString) peer=\(peer.name)")
+        log(.info, "syncItem itemID=\(item.id.uuidString) peer=\(peer.name)")
 
         let nwConnection = discovery.connect(to: peer)
         let connection = SyncConnection(connection: nwConnection, peerID: peer.name, peerName: peer.name)
@@ -53,7 +53,7 @@ class SyncService: ObservableObject {
             }
         }
         connection.onDisconnect = { [weak self] disconnected in
-            self?.log("connection disconnected peerID=\(disconnected.peerID) peerName=\(disconnected.peerName)")
+            self?.log(.debug, "connection disconnected peerID=\(disconnected.peerID) peerName=\(disconnected.peerName)")
         }
         connection.onMessage = { [weak self] message in
             self?.handle(message: message, from: connection)
@@ -69,25 +69,25 @@ class SyncService: ObservableObject {
                 self?.handle(message: message, from: connection)
             }
             connection.onDisconnect = { [weak self] disconnected in
-                self?.log("incoming disconnected peerID=\(disconnected.peerID) peerName=\(disconnected.peerName)")
+                self?.log(.debug, "incoming disconnected peerID=\(disconnected.peerID) peerName=\(disconnected.peerName)")
             }
             connection.start()
         }
     }
 
     private func handle(message: SyncMessage, from connection: SyncConnection) {
-        log("handle type=\(message.type.rawValue) senderID=\(message.senderID) senderName=\(message.senderName)")
+        log(.debug, "handle type=\(message.type.rawValue) senderID=\(message.senderID) senderName=\(message.senderName)")
         switch message.type {
         case .hello:
             break
         case .items:
             guard let payloadData = message.plainPayload,
                   let payload = try? JSONDecoder().decode(SyncItemsPayload.self, from: payloadData) else {
-                log("failed to decode items payload from senderID=\(message.senderID)")
+                log(.warn, "failed to decode items payload from senderID=\(message.senderID)")
                 connection.cancel()
                 return
             }
-            log("decoded \(payload.items.count) synced item(s) from senderID=\(message.senderID)")
+            log(.info, "decoded \(payload.items.count) synced item(s) from senderID=\(message.senderID)")
             receiveItems(payload.items)
             connection.cancel()
         case .ack:
@@ -98,6 +98,10 @@ class SyncService: ObservableObject {
         case .pong:
             break
         }
+    }
+
+    func boostDiscovery() {
+        discovery.boostActivity()
     }
 
     private func sendItems(_ items: [ClipboardItem], via connection: SyncConnection) {
@@ -123,11 +127,11 @@ class SyncService: ObservableObject {
             let store = ClipboardStore.shared
             for syncItem in items {
                 guard let uuid = UUID(uuidString: syncItem.id) else {
-                    self.log("skip synced item because id is not UUID id=\(syncItem.id)")
+                    self.log(.warn, "skip synced item because id is not UUID id=\(syncItem.id)")
                     continue
                 }
                 if store.fetchAllItems().contains(where: { $0.id == uuid }) {
-                    self.log("skip synced item because id already exists id=\(syncItem.id)")
+                    self.log(.debug, "skip synced item because id already exists id=\(syncItem.id)")
                     continue
                 }
                 let item = ClipboardItem(
@@ -138,13 +142,13 @@ class SyncService: ObservableObject {
                     sourceApp: "📡 \(syncItem.sourceApp)",
                     isPinned: false
                 )
-                self.log("store synced item id=\(syncItem.id) sourceApp=\(syncItem.sourceApp)")
+                self.log(.debug, "store synced item id=\(syncItem.id) sourceApp=\(syncItem.sourceApp)")
                 store.addItem(item)
             }
         }
     }
 
-    private func log(_ message: String) {
-        print("[SyncService] \(message)")
+    private func log(_ level: AppLogLevel = .debug, _ message: String) {
+        AppLogger.shared.log(level, "SyncService", message)
     }
 }

@@ -12,4 +12,8 @@ class SyncViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .assign(to: &$discoveredPeers)
     }
+
+    func boostDiscovery() {
+        service.boostDiscovery()
+    }
 }

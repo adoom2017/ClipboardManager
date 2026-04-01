@@ -50,5 +50,8 @@ struct SyncView: View {
             }
         }
         .padding(20)
+        .onAppear {
+            viewModel.boostDiscovery()
+        }
     }
 }

@@ -32,7 +32,7 @@ class PersistenceController {
             decoder.dateDecodingStrategy = .iso8601
             return try decoder.decode([ClipboardItem].self, from: data)
         } catch {
-            print("Failed to load clipboard items: \(error)")
+            AppLogger.shared.error("Persistence", "failed to load clipboard items error=\(error)")
             return []
         }
     }
@@ -45,7 +45,7 @@ class PersistenceController {
             let data = try encoder.encode(items)
             try data.write(to: fileURL, options: .atomic)
         } catch {
-            print("Failed to save clipboard items: \(error)")
+            AppLogger.shared.error("Persistence", "failed to save clipboard items error=\(error)")
         }
     }
 

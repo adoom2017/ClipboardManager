@@ -16,6 +16,7 @@ class SyncDiscovery: ObservableObject {
     private var restartWorkItem: DispatchWorkItem?
     private var bonjourPeers: [String: DiscoveredPeer] = [:]
     private var broadcastPeers: [String: DiscoveredPeer] = [:]
+    private var lastPublishedPeerNames = Set<String>()
 
     /// 本机 Bonjour 服务名（= localID），用于过滤自身
     private let localServiceName: String
@@ -32,7 +33,7 @@ class SyncDiscovery: ObservableObject {
     func start(port: NWEndpoint.Port = .any) {
         guard !isRunning else { return }
         isRunning = true
-        log("start localServiceName=\(localServiceName)")
+        log(.info, "start localServiceName=\(localServiceName)")
         startListener(port: port)
         startBrowser()
         startBroadcastDiscovery(port: port)
@@ -50,6 +51,7 @@ class SyncDiscovery: ObservableObject {
         broadcastDiscovery = nil
         bonjourPeers.removeAll()
         broadcastPeers.removeAll()
+        lastPublishedPeerNames.removeAll()
         DispatchQueue.main.async { self.discoveredPeers = [] }
     }
 
@@ -60,21 +62,21 @@ class SyncDiscovery: ObservableObject {
         params.includePeerToPeer = true
 
         guard let listener = try? NWListener(using: params, on: port) else {
-            log("failed to create NWListener")
+            log(.error, "failed to create NWListener")
             scheduleRestart(reason: "listener create failed")
             return
         }
         listener.service = NWListener.Service(name: localServiceName, type: Self.serviceType)
 
         listener.newConnectionHandler = { [weak self] connection in
-            self?.log("incoming connection endpoint=\(connection.endpoint)")
+            self?.log(.debug, "incoming connection endpoint=\(connection.endpoint)")
             self?.onIncomingConnection?(connection)
         }
         listener.stateUpdateHandler = { [weak self] state in
-            self?.log("listener state=\(state)")
+            self?.log(.debug, "listener state=\(state)")
             switch state {
             case .failed(let error):
-                self?.log("listener failed error=\(error)")
+                self?.log(.error, "listener failed error=\(error)")
                 self?.listener?.cancel()
                 self?.listener = nil
                 self?.scheduleRestart(reason: "listener failed")
@@ -103,15 +105,15 @@ class SyncDiscovery: ObservableObject {
                 guard name != self.localServiceName else { return nil }
                 return DiscoveredPeer(name: name, endpoint: result.endpoint, host: nil, port: nil)
             }
-            self.log("browse results count=\(results.count) peers=\(peers.map(\.name).joined(separator: ","))")
+            self.log(.debug, "browse results count=\(results.count) peers=\(peers.map(\.name).joined(separator: ","))")
             self.bonjourPeers = Dictionary(uniqueKeysWithValues: peers.map { ($0.name, $0) })
             self.publishMergedPeers()
         }
         browser.stateUpdateHandler = { [weak self] state in
-            self?.log("browser state=\(state)")
+            self?.log(.debug, "browser state=\(state)")
             switch state {
             case .failed(let error):
-                self?.log("browser failed error=\(error)")
+                self?.log(.error, "browser failed error=\(error)")
                 self?.browser?.cancel()
                 self?.browser = nil
                 self?.scheduleRestart(reason: "browser failed")
@@ -131,14 +133,14 @@ class SyncDiscovery: ObservableObject {
         let params = NWParameters.tcp
         params.includePeerToPeer = true
         if let host = peer.host, let port = peer.port {
-            log("connect to peer=\(peer.name) host=\(host) port=\(port) via=broadcast")
+            log(.info, "connect to peer=\(peer.name) host=\(host) port=\(port) via=broadcast")
             return NWConnection(
                 host: NWEndpoint.Host(host),
                 port: NWEndpoint.Port(integerLiteral: NWEndpoint.Port.IntegerLiteralType(port)),
                 using: params
             )
         }
-        log("connect to peer=\(peer.name) endpoint=\(peer.endpoint.debugDescription) via=bonjour")
+        log(.info, "connect to peer=\(peer.name) endpoint=\(peer.endpoint.debugDescription) via=bonjour")
         if let endpoint = peer.endpoint {
             return NWConnection(to: endpoint, using: params)
         }
@@ -154,7 +156,7 @@ class SyncDiscovery: ObservableObject {
         switch port {
         case .any:
             guard let actualPort = listener?.port?.rawValue else {
-                log("broadcast start skipped; listener port unavailable")
+                log(.warn, "broadcast start skipped; listener port unavailable")
                 return
             }
             portValue = actualPort
@@ -162,7 +164,7 @@ class SyncDiscovery: ObservableObject {
             portValue = port.rawValue
         }
 
-        log("starting broadcast discovery localID=\(localServiceName) port=\(portValue)")
+        log(.info, "starting broadcast discovery localID=\(localServiceName) port=\(portValue)")
         let discovery = SyncBroadcastDiscovery(
             localID: localServiceName,
             localName: Host.current().localizedName ?? "Mac",
@@ -170,12 +172,16 @@ class SyncDiscovery: ObservableObject {
         )
         discovery.onPeerDiscovered = { [weak self] peer in
             guard let self else { return }
-            self.log("broadcast peer discovered id=\(peer.name) host=\(peer.host ?? "") port=\(peer.port ?? 0)")
+            self.log(.debug, "broadcast peer discovered id=\(peer.name) host=\(peer.host ?? "") port=\(peer.port ?? 0)")
             self.broadcastPeers[peer.name] = peer
             self.publishMergedPeers()
         }
         discovery.start()
         broadcastDiscovery = discovery
+    }
+
+    func boostActivity() {
+        broadcastDiscovery?.boostBurst()
     }
 
     private func publishMergedPeers() {
@@ -190,6 +196,12 @@ class SyncDiscovery: ObservableObject {
                 port: broadcastPeer?.port ?? bonjourPeer?.port
             )
         }
+        let mergedNames = Set(merged.map(\.name))
+        let newlyDiscovered = mergedNames.subtracting(lastPublishedPeerNames)
+        for name in newlyDiscovered.sorted() {
+            log(.info, "discovered peer name=\(name)")
+        }
+        lastPublishedPeerNames = mergedNames
         DispatchQueue.main.async {
             self.discoveredPeers = merged.sorted { $0.name < $1.name }
         }
@@ -200,7 +212,7 @@ class SyncDiscovery: ObservableObject {
         restartWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
             guard let self, self.isRunning else { return }
-            self.log("restarting discovery reason=\(reason)")
+            self.log(.info, "restarting discovery reason=\(reason)")
             self.listener?.cancel()
             self.listener = nil
             self.browser?.cancel()
@@ -212,8 +224,8 @@ class SyncDiscovery: ObservableObject {
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1.0, execute: workItem)
     }
 
-    private func log(_ message: String) {
-        print("[SyncDiscovery] \(message)")
+    private func log(_ level: AppLogLevel = .debug, _ message: String) {
+        AppLogger.shared.log(level, "SyncDiscovery", message)
     }
 }
 
@@ -244,6 +256,11 @@ private final class SyncBroadcastDiscovery {
     private var socketFD: Int32 = -1
     private var readSource: DispatchSourceRead?
     private var announceTimer: DispatchSourceTimer?
+    private let burstDuration: TimeInterval = 10
+    private let burstInterval: TimeInterval = 2
+    private let steadyInterval: TimeInterval = 15
+    private var cadenceStart: Date?
+    private var didLogSteadyCadence = false
 
     init(localID: String, localName: String, serverPort: Int) {
         self.localID = localID
@@ -257,7 +274,7 @@ private final class SyncBroadcastDiscovery {
 
         socketFD = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard socketFD >= 0 else {
-            log("socket create failed")
+            log(.error, "socket create failed")
             return
         }
 
@@ -278,15 +295,15 @@ private final class SyncBroadcastDiscovery {
             }
         }
         guard bindResult == 0 else {
-            log("bind failed on port \(Self.broadcastPort)")
+            log(.error, "bind failed on port \(Self.broadcastPort)")
             stop()
             return
         }
-        log("listening on UDP broadcast port \(Self.broadcastPort)")
+        log(.info, "listening on UDP broadcast port \(Self.broadcastPort)")
         if let advertisedHost {
-            log("selectedIPv4=\(advertisedHost)")
+            log(.info, "selectedIPv4=\(advertisedHost)")
         } else {
-            log("selectedIPv4 unavailable; receiver will use packet source IP")
+            log(.warn, "selectedIPv4 unavailable; receiver will use packet source IP")
         }
 
         let queue = DispatchQueue.global(qos: .utility)
@@ -302,13 +319,11 @@ private final class SyncBroadcastDiscovery {
         source.resume()
         readSource = source
 
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now(), repeating: .seconds(2))
-        timer.setEventHandler { [weak self] in
-            self?.sendAnnouncement()
-        }
-        timer.resume()
-        announceTimer = timer
+        cadenceStart = Date()
+        didLogSteadyCadence = false
+        log(.info, "broadcast cadence started burstInterval=\(Int(burstInterval))s steadyInterval=\(Int(steadyInterval))s")
+        sendAnnouncement()
+        scheduleNextAnnouncement(after: nextAnnouncementInterval(), on: queue)
     }
 
     func stop() {
@@ -320,6 +335,15 @@ private final class SyncBroadcastDiscovery {
             shutdown(socketFD, SHUT_RDWR)
         }
         socketFD = -1
+    }
+
+    func boostBurst() {
+        guard socketFD >= 0 else { return }
+        cadenceStart = Date()
+        didLogSteadyCadence = false
+        log(.info, "broadcast cadence boosted to burst mode")
+        sendAnnouncement()
+        scheduleNextAnnouncement(after: nextAnnouncementInterval(), on: .global(qos: .utility))
     }
 
     private func sendAnnouncement() {
@@ -349,7 +373,7 @@ private final class SyncBroadcastDiscovery {
                 }
             }
         }
-        log("broadcast announce id=\(localID) name=\(localName) port=\(serverPort) host=\(advertisedHost ?? "packet-source")")
+        log(.debug, "broadcast announce id=\(localID) name=\(localName) port=\(serverPort) host=\(advertisedHost ?? "packet-source")")
     }
 
     private func receivePacket() {
@@ -375,9 +399,35 @@ private final class SyncBroadcastDiscovery {
 
         let senderIP = String(cString: inet_ntoa(sender.sin_addr))
         let host = (object["host"] as? String).flatMap { Self.isPrivateIPv4($0) ? $0 : nil } ?? senderIP
-        log("broadcast packet received id=\(id) host=\(host) sender=\(senderIP) port=\(port)")
+        log(.debug, "broadcast packet received id=\(id) host=\(host) sender=\(senderIP) port=\(port)")
         let peer = DiscoveredPeer(name: id, endpoint: nil, host: host, port: port)
         onPeerDiscovered?(peer)
+    }
+
+    private func nextAnnouncementInterval() -> TimeInterval {
+        guard let cadenceStart else { return steadyInterval }
+        let elapsed = Date().timeIntervalSince(cadenceStart)
+        if elapsed < burstDuration {
+            return burstInterval
+        }
+        if !didLogSteadyCadence {
+            didLogSteadyCadence = true
+            log(.info, "broadcast cadence switched to steady interval=\(Int(steadyInterval))s")
+        }
+        return steadyInterval
+    }
+
+    private func scheduleNextAnnouncement(after interval: TimeInterval, on queue: DispatchQueue) {
+        announceTimer?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + interval)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.sendAnnouncement()
+            self.scheduleNextAnnouncement(after: self.nextAnnouncementInterval(), on: queue)
+        }
+        timer.resume()
+        announceTimer = timer
     }
 
     private static func selectPreferredLocalIPv4() -> String? {
@@ -434,7 +484,7 @@ private final class SyncBroadcastDiscovery {
         return false
     }
 
-    private func log(_ message: String) {
-        print("[SyncBroadcast] \(message)")
+    private func log(_ level: AppLogLevel = .debug, _ message: String) {
+        AppLogger.shared.log(level, "SyncBroadcast", message)
     }
 }

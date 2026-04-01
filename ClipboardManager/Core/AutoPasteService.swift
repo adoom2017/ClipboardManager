@@ -61,7 +61,7 @@ class AutoPasteService {
         case .image:
             guard let imageName = item.imageName,
                   let image = PersistenceController.shared.loadImage(named: imageName) else {
-                print("[AutoPaste] 图片文件不存在")
+                AppLogger.shared.warn("AutoPaste", "image file missing for auto paste")
                 return
             }
             pasteboard.setClipboardImage(image)
@@ -102,18 +102,18 @@ class AutoPasteService {
     private func performPaste(targetPID: pid_t? = nil) {
         // 方式 1：CGEvent（速度快，最直接）
         if pasteViaCGEvent(targetPID: targetPID) {
-            print("[AutoPaste] CGEvent 粘贴成功")
+            AppLogger.shared.info("AutoPaste", "paste succeeded via CGEvent")
             return
         }
 
         // 方式 2：AppleScript（备选）
         if pasteViaAppleScript() {
-            print("[AutoPaste] AppleScript 粘贴成功")
+            AppLogger.shared.info("AutoPaste", "paste succeeded via AppleScript")
             return
         }
 
         // 两种方式都失败，仅提示一次
-        print("[AutoPaste] 所有粘贴方式都失败")
+        AppLogger.shared.error("AutoPaste", "all paste methods failed")
         if !hasShownPermissionHint {
             hasShownPermissionHint = true
             showAccessibilityPermissionAlert()
@@ -128,7 +128,7 @@ class AutoPasteService {
 
         guard let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
               let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) else {
-            print("[AutoPaste] CGEvent 创建失败")
+            AppLogger.shared.warn("AutoPaste", "failed to create CGEvent paste events")
             return false
         }
 
@@ -158,7 +158,7 @@ class AutoPasteService {
         appleScript?.executeAndReturnError(&error)
 
         if let error = error {
-            print("[AutoPaste] AppleScript 失败: \(error)")
+            AppLogger.shared.warn("AutoPaste", "AppleScript paste failed error=\(error)")
             return false
         }
         return true
