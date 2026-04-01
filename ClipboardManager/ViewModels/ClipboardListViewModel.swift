@@ -19,6 +19,7 @@ class ClipboardListViewModel: ObservableObject {
 
     init() {
         loadClipboardItems()
+        observeStore()
         setupClipboardMonitor()
     }
 
@@ -36,6 +37,15 @@ class ClipboardListViewModel: ObservableObject {
                 self.clipboardItems.removeAll { $0.content == newItem.content && !$0.isPinned }
                 let pinnedCount = self.clipboardItems.filter { $0.isPinned }.count
                 self.clipboardItems.insert(newItem, at: pinnedCount)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func observeStore() {
+        ClipboardStore.shared.$items
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] items in
+                self?.clipboardItems = items
             }
             .store(in: &cancellables)
     }

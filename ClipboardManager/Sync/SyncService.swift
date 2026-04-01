@@ -87,6 +87,7 @@ class SyncService: ObservableObject {
                 connection.cancel()
                 return
             }
+            log("decoded \(payload.items.count) synced item(s) from senderID=\(message.senderID)")
             receiveItems(payload.items)
             connection.cancel()
         case .ack:
@@ -118,19 +119,28 @@ class SyncService: ObservableObject {
     }
 
     private func receiveItems(_ items: [SyncClipboardItem]) {
-        let store = ClipboardStore.shared
-        for syncItem in items {
-            guard let uuid = UUID(uuidString: syncItem.id) else { continue }
-            if store.fetchAllItems().contains(where: { $0.id == uuid }) { continue }
-            let item = ClipboardItem(
-                id: uuid,
-                contentType: .text,
-                content: syncItem.content,
-                timestamp: syncItem.timestamp,
-                sourceApp: "📡 \(syncItem.sourceApp)",
-                isPinned: false
-            )
-            store.addItem(item)
+        DispatchQueue.main.async {
+            let store = ClipboardStore.shared
+            for syncItem in items {
+                guard let uuid = UUID(uuidString: syncItem.id) else {
+                    self.log("skip synced item because id is not UUID id=\(syncItem.id)")
+                    continue
+                }
+                if store.fetchAllItems().contains(where: { $0.id == uuid }) {
+                    self.log("skip synced item because id already exists id=\(syncItem.id)")
+                    continue
+                }
+                let item = ClipboardItem(
+                    id: uuid,
+                    contentType: .text,
+                    content: syncItem.content,
+                    timestamp: syncItem.timestamp,
+                    sourceApp: "📡 \(syncItem.sourceApp)",
+                    isPinned: false
+                )
+                self.log("store synced item id=\(syncItem.id) sourceApp=\(syncItem.sourceApp)")
+                store.addItem(item)
+            }
         }
     }
 
