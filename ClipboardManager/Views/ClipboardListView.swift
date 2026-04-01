@@ -34,13 +34,12 @@ struct ClipboardListView: View {
                             Button("翻译") {
                                 TranslationWindowController.shared.show(text: item.content)
                             }
-                            // 手动同步（自动同步关闭时或主动推送）
-                            let peers = SyncService.shared.activePeers
+                            let peers = SyncService.shared.discoveredPeers
                             if !peers.isEmpty {
                                 Menu("同步到设备") {
                                     ForEach(peers) { peer in
                                         Button(peer.name) {
-                                            SyncService.shared.syncItem(item, to: peer.id)
+                                            SyncService.shared.syncItem(item, to: peer)
                                         }
                                     }
                                 }

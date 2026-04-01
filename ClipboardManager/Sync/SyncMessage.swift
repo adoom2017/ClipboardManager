@@ -4,11 +4,7 @@ import Foundation
 
 enum SyncMessageType: String, Codable {
     case hello            // 初次握手，携带设备名称
-    case pairingRequest   // 申请配对
-    case pairingPin       // 发送 PIN 确认码
-    case pairingAck       // 配对完成确认
-    case pairingReject    // 拒绝配对
-    case items            // 推送剪贴板条目（加密 payload）
+    case items            // 推送剪贴板条目（明文 payload）
     case ack              // 收到确认
     case ping             // 心跳
     case pong             // 心跳回应
@@ -22,9 +18,7 @@ struct SyncMessage: Codable {
     var senderID: String
     /// 发送方设备名称（可读）
     var senderName: String
-    /// 加密后的业务 payload（items 消息时有值）
-    var encryptedPayload: Data?
-    /// 明文小字段（pairing 阶段使用，不含敏感数据）
+    /// 明文 payload（items 消息时有值）
     var plainPayload: Data?
 
     // MARK: 帧编解码（4 字节大端长度头 + JSON body）

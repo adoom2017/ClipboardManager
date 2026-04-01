@@ -7,6 +7,7 @@ struct ClipboardRowView: View {
     var onPin: (() -> Void)? = nil
 
     @State private var thumbnail: NSImage?
+    @ObservedObject private var syncService = SyncService.shared
 
     var body: some View {
         HStack(spacing: 8) {
@@ -58,18 +59,8 @@ struct ClipboardRowView: View {
                 .buttonStyle(.plain)
                 .help("翻译")
 
-                // 手动同步按钮：hover 时显示，有在线设备时可用
-                if !SyncService.shared.activePeers.isEmpty && !SyncService.shared.isAutoSyncEnabled
-                    && clipboardItem.contentType == .text {
-                    Button(action: {
-                        SyncService.shared.syncItemToAll(clipboardItem)
-                    }) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
-                    }
-                    .buttonStyle(.plain)
-                    .help("同步到所有设备")
+                if isHovered && clipboardItem.contentType == .text {
+                    syncAction
                 }
             }
 
@@ -87,6 +78,36 @@ struct ClipboardRowView: View {
             thumbnail = await Task.detached(priority: .utility) {
                 PersistenceController.shared.loadImage(named: name)
             }.value
+        }
+    }
+
+    @ViewBuilder
+    private var syncAction: some View {
+        let peers = syncService.discoveredPeers
+        if peers.count == 1, let peer = peers.first {
+            Button(action: {
+                syncService.syncItem(clipboardItem, to: peer)
+            }) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .help("同步到 \(peer.name)")
+        } else if !peers.isEmpty {
+            Menu {
+                ForEach(peers) { peer in
+                    Button(peer.name) {
+                        syncService.syncItem(clipboardItem, to: peer)
+                    }
+                }
+            } label: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+            .menuStyle(.borderlessButton)
+            .help("选择同步目标")
         }
     }
 

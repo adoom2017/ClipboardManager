@@ -1,6 +1,5 @@
 import Foundation
 import Network
-import CryptoKit
 
 /// 封装单个 NWConnection，提供帧级消息收发
 class SyncConnection {
@@ -8,12 +7,13 @@ class SyncConnection {
     let peerID: String
     let peerName: String
     private let connection: NWConnection
-    var sharedKey: SymmetricKey?
 
     /// 收到完整消息帧时回调（主线程）
     var onMessage: ((SyncMessage) -> Void)?
     /// 连接断开时回调
     var onDisconnect: ((SyncConnection) -> Void)?
+    /// 连接就绪时回调
+    var onReady: ((SyncConnection) -> Void)?
 
     private var receiveBuffer = Data()
 
@@ -31,6 +31,7 @@ class SyncConnection {
             print("[SyncConnection] state peerName=\(self.peerName) peerID=\(self.peerID) state=\(state)")
             switch state {
             case .ready:
+                DispatchQueue.main.async { self.onReady?(self) }
                 self.receiveNextFrame()
             case .failed(let error):
                 print("[SyncConnection] failed peerName=\(self.peerName) error=\(error)")

@@ -130,16 +130,17 @@ class SyncDiscovery: ObservableObject {
     func connect(to peer: DiscoveredPeer) -> NWConnection {
         let params = NWParameters.tcp
         params.includePeerToPeer = true
-        log("connect to peer=\(peer.name) endpoint=\(peer.endpoint)")
-        if let endpoint = peer.endpoint {
-            return NWConnection(to: endpoint, using: params)
-        }
         if let host = peer.host, let port = peer.port {
+            log("connect to peer=\(peer.name) host=\(host) port=\(port) via=broadcast")
             return NWConnection(
                 host: NWEndpoint.Host(host),
                 port: NWEndpoint.Port(integerLiteral: NWEndpoint.Port.IntegerLiteralType(port)),
                 using: params
             )
+        }
+        log("connect to peer=\(peer.name) endpoint=\(peer.endpoint.debugDescription) via=bonjour")
+        if let endpoint = peer.endpoint {
+            return NWConnection(to: endpoint, using: params)
         }
         return NWConnection(
             host: NWEndpoint.Host("127.0.0.1"),
@@ -161,6 +162,7 @@ class SyncDiscovery: ObservableObject {
             portValue = port.rawValue
         }
 
+        log("starting broadcast discovery localID=\(localServiceName) port=\(portValue)")
         let discovery = SyncBroadcastDiscovery(
             localID: localServiceName,
             localName: Host.current().localizedName ?? "Mac",
@@ -177,7 +179,17 @@ class SyncDiscovery: ObservableObject {
     }
 
     private func publishMergedPeers() {
-        let merged = Array(bonjourPeers.values) + broadcastPeers.values.filter { bonjourPeers[$0.name] == nil }
+        let merged = Array(Set(bonjourPeers.keys).union(broadcastPeers.keys)).compactMap { peerName -> DiscoveredPeer? in
+            let bonjourPeer = bonjourPeers[peerName]
+            let broadcastPeer = broadcastPeers[peerName]
+            guard bonjourPeer != nil || broadcastPeer != nil else { return nil }
+            return DiscoveredPeer(
+                name: peerName,
+                endpoint: bonjourPeer?.endpoint,
+                host: broadcastPeer?.host ?? bonjourPeer?.host,
+                port: broadcastPeer?.port ?? bonjourPeer?.port
+            )
+        }
         DispatchQueue.main.async {
             self.discoveredPeers = merged.sorted { $0.name < $1.name }
         }
@@ -228,6 +240,7 @@ private final class SyncBroadcastDiscovery {
     private let localID: String
     private let localName: String
     private let serverPort: Int
+    private let advertisedHost: String?
     private var socketFD: Int32 = -1
     private var readSource: DispatchSourceRead?
     private var announceTimer: DispatchSourceTimer?
@@ -236,16 +249,21 @@ private final class SyncBroadcastDiscovery {
         self.localID = localID
         self.localName = localName
         self.serverPort = serverPort
+        self.advertisedHost = Self.selectPreferredLocalIPv4()
     }
 
     func start() {
         stop()
 
         socketFD = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-        guard socketFD >= 0 else { return }
+        guard socketFD >= 0 else {
+            log("socket create failed")
+            return
+        }
 
         var reuse: Int32 = 1
         setsockopt(socketFD, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+        setsockopt(socketFD, SOL_SOCKET, SO_REUSEPORT, &reuse, socklen_t(MemoryLayout<Int32>.size))
         setsockopt(socketFD, SOL_SOCKET, SO_BROADCAST, &reuse, socklen_t(MemoryLayout<Int32>.size))
 
         var addr = sockaddr_in()
@@ -260,8 +278,15 @@ private final class SyncBroadcastDiscovery {
             }
         }
         guard bindResult == 0 else {
+            log("bind failed on port \(Self.broadcastPort)")
             stop()
             return
+        }
+        log("listening on UDP broadcast port \(Self.broadcastPort)")
+        if let advertisedHost {
+            log("selectedIPv4=\(advertisedHost)")
+        } else {
+            log("selectedIPv4 unavailable; receiver will use packet source IP")
         }
 
         let queue = DispatchQueue.global(qos: .utility)
@@ -299,12 +324,15 @@ private final class SyncBroadcastDiscovery {
 
     private func sendAnnouncement() {
         guard socketFD >= 0 else { return }
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "signature": Self.signature,
             "id": localID,
             "name": localName,
             "port": serverPort
         ]
+        if let advertisedHost {
+            payload["host"] = advertisedHost
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
 
         var dest = sockaddr_in()
@@ -321,6 +349,7 @@ private final class SyncBroadcastDiscovery {
                 }
             }
         }
+        log("broadcast announce id=\(localID) name=\(localName) port=\(serverPort) host=\(advertisedHost ?? "packet-source")")
     }
 
     private func receivePacket() {
@@ -345,7 +374,67 @@ private final class SyncBroadcastDiscovery {
               id != localID else { return }
 
         let senderIP = String(cString: inet_ntoa(sender.sin_addr))
-        let peer = DiscoveredPeer(name: id, endpoint: nil, host: senderIP, port: port)
+        let host = (object["host"] as? String).flatMap { Self.isPrivateIPv4($0) ? $0 : nil } ?? senderIP
+        log("broadcast packet received id=\(id) host=\(host) sender=\(senderIP) port=\(port)")
+        let peer = DiscoveredPeer(name: id, endpoint: nil, host: host, port: port)
         onPeerDiscovered?(peer)
+    }
+
+    private static func selectPreferredLocalIPv4() -> String? {
+        let candidates = localIPv4Candidates()
+        if let preferred = candidates.first(where: { candidate in
+            let lowercased = candidate.interface.lowercased()
+            return lowercased.contains("en0") || lowercased.contains("en1") || lowercased.contains("bridge")
+        }) {
+            return preferred.address
+        }
+        return candidates.first?.address
+    }
+
+    private static func localIPv4Candidates() -> [(interface: String, address: String)] {
+        var pointer: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&pointer) == 0, let first = pointer else { return [] }
+        defer { freeifaddrs(pointer) }
+
+        var results: [(String, String)] = []
+        var current: UnsafeMutablePointer<ifaddrs>? = first
+        while let entry = current?.pointee {
+            defer { current = entry.ifa_next }
+            guard let address = entry.ifa_addr, address.pointee.sa_family == UInt8(AF_INET) else { continue }
+
+            let interfaceName = String(cString: entry.ifa_name)
+            let flags = Int32(entry.ifa_flags)
+            guard (flags & IFF_UP) != 0, (flags & IFF_RUNNING) != 0, (flags & IFF_LOOPBACK) == 0 else { continue }
+
+            var hostBuffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            let result = getnameinfo(
+                address,
+                socklen_t(address.pointee.sa_len),
+                &hostBuffer,
+                socklen_t(hostBuffer.count),
+                nil,
+                0,
+                NI_NUMERICHOST
+            )
+            guard result == 0 else { continue }
+
+            let addressString = String(cString: hostBuffer)
+            guard isPrivateIPv4(addressString) else { continue }
+            results.append((interfaceName, addressString))
+        }
+        return results
+    }
+
+    private static func isPrivateIPv4(_ address: String) -> Bool {
+        let octets = address.split(separator: ".").compactMap { Int($0) }
+        guard octets.count == 4 else { return false }
+        if octets[0] == 10 { return true }
+        if octets[0] == 172, (16...31).contains(octets[1]) { return true }
+        if octets[0] == 192, octets[1] == 168 { return true }
+        return false
+    }
+
+    private func log(_ message: String) {
+        print("[SyncBroadcast] \(message)")
     }
 }
