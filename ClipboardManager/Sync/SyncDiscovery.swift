@@ -18,6 +18,7 @@ class SyncDiscovery: ObservableObject {
     private var broadcastPeers: [String: DiscoveredPeer] = [:]
     private var broadcastPeerLastSeen: [String: Date] = [:]
     private var broadcastCleanupTimer: DispatchSourceTimer?
+    private var currentBroadcastPort: UInt16?
     private var lastPublishedPeerNames = Set<String>()
 
     /// 本机 Bonjour 服务名（= localID），用于过滤自身
@@ -40,7 +41,6 @@ class SyncDiscovery: ObservableObject {
         log(.info, "start localServiceName=\(localServiceName)")
         startListener(port: port)
         startBrowser()
-        startBroadcastDiscovery(port: port)
     }
 
     func stop() {
@@ -53,6 +53,7 @@ class SyncDiscovery: ObservableObject {
         browser = nil
         broadcastDiscovery?.stop()
         broadcastDiscovery = nil
+        currentBroadcastPort = nil
         broadcastCleanupTimer?.cancel()
         broadcastCleanupTimer = nil
         bonjourPeers.removeAll()
@@ -87,13 +88,17 @@ class SyncDiscovery: ObservableObject {
         listener.stateUpdateHandler = { [weak self] state in
             self?.log(.debug, "listener state=\(state)")
             switch state {
+            case .ready:
+                self?.ensureBroadcastDiscoveryStarted()
             case .failed(let error):
                 self?.log(.error, "listener failed error=\(error)")
                 self?.listener?.cancel()
                 self?.listener = nil
+                self?.stopBroadcastDiscovery()
                 self?.scheduleRestart(reason: "listener failed")
             case .cancelled:
                 self?.listener = nil
+                self?.stopBroadcastDiscovery()
             default:
                 break
             }
@@ -169,19 +174,17 @@ class SyncDiscovery: ObservableObject {
         )
     }
 
-    private func startBroadcastDiscovery(port: NWEndpoint.Port) {
-        let portValue: UInt16
-        switch port {
-        case .any:
-            guard let actualPort = listener?.port?.rawValue else {
-                log(.warn, "broadcast start skipped; listener port unavailable")
-                return
-            }
-            portValue = actualPort
-        default:
-            portValue = port.rawValue
+    private func ensureBroadcastDiscoveryStarted() {
+        guard let portValue = listener?.port?.rawValue, portValue != 0 else {
+            log(.warn, "broadcast start skipped; listener port unavailable")
+            return
         }
+        guard currentBroadcastPort != portValue else { return }
+        startBroadcastDiscovery(port: portValue)
+    }
 
+    private func startBroadcastDiscovery(port portValue: UInt16) {
+        stopBroadcastDiscovery()
         log(.info, "starting broadcast discovery localID=\(localServiceName) port=\(portValue)")
         let discovery = SyncBroadcastDiscovery(
             localID: localServiceName,
@@ -197,7 +200,14 @@ class SyncDiscovery: ObservableObject {
         }
         discovery.start()
         broadcastDiscovery = discovery
+        currentBroadcastPort = portValue
         startBroadcastCleanupTimer()
+    }
+
+    private func stopBroadcastDiscovery() {
+        broadcastDiscovery?.stop()
+        broadcastDiscovery = nil
+        currentBroadcastPort = nil
     }
 
     func boostActivity() {
