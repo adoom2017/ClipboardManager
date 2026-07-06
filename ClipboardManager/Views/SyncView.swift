@@ -2,13 +2,27 @@ import SwiftUI
 
 struct SyncView: View {
     @ObservedObject var viewModel: SyncViewModel
+    @ObservedObject var settingsViewModel: SettingsViewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("设备会在局域网内自动发现。点击剪贴板条目的同步按钮时，应用会临时连接目标设备并发送该条文本内容。")
+            Text("设备会在局域网内自动发现。两端配置相同的 6 位 PIN 后，文本会通过 AES-GCM 加密传输。")
                 .font(.callout)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            HStack {
+                Text("同步 PIN")
+                SecureField("6 位数字", text: $settingsViewModel.syncPIN)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 120)
+                Spacer()
+                Text(settingsViewModel.syncPIN.count == 6 ? "已配置" : "未配置")
+                    .font(.caption)
+                    .foregroundStyle(settingsViewModel.syncPIN.count == 6 ? .green : .secondary)
+            }
 
             Divider()
 

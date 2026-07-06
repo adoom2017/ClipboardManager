@@ -23,8 +23,13 @@ enum SyncCrypto {
     // MARK: - 加密
 
     /// AES-GCM 加密，返回 nonce(12B) + ciphertext + tag 拼接后的 Data
-    static func encrypt(_ plaintext: Data, using key: SymmetricKey) throws -> Data {
-        let sealedBox = try AES.GCM.seal(plaintext, using: key)
+    static func encrypt(_ plaintext: Data, using key: SymmetricKey, nonceData: Data? = nil) throws -> Data {
+        let sealedBox: AES.GCM.SealedBox
+        if let nonceData {
+            sealedBox = try AES.GCM.seal(plaintext, using: key, nonce: AES.GCM.Nonce(data: nonceData))
+        } else {
+            sealedBox = try AES.GCM.seal(plaintext, using: key)
+        }
         // combined = nonce + ciphertext + tag
         guard let combined = sealedBox.combined else {
             throw SyncCryptoError.encryptionFailed
@@ -39,12 +44,6 @@ enum SyncCrypto {
         return try AES.GCM.open(sealedBox, using: key)
     }
 
-    // MARK: - PIN 生成
-
-    /// 生成 6 位数字 PIN
-    static func generatePIN() -> String {
-        String(format: "%06d", Int.random(in: 0..<1_000_000))
-    }
 }
 
 enum SyncCryptoError: LocalizedError {

@@ -4,7 +4,7 @@ import Foundation
 
 enum SyncMessageType: String, Codable {
     case hello            // 初次握手，携带设备名称
-    case items            // 推送剪贴板条目（明文 payload）
+    case items            // 推送加密的剪贴板条目
     case ack              // 收到确认
     case ping             // 心跳
     case pong             // 心跳回应
@@ -18,8 +18,8 @@ struct SyncMessage: Codable {
     var senderID: String
     /// 发送方设备名称（可读）
     var senderName: String
-    /// 明文 payload（items 消息时有值）
-    var plainPayload: Data?
+    /// AES-GCM: nonce + ciphertext + tag
+    var encryptedPayload: Data?
 
     // MARK: 帧编解码（4 字节大端长度头 + JSON body）
 

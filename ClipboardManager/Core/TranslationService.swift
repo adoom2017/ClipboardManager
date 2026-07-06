@@ -48,12 +48,30 @@ class TranslationService {
         baseURL.contains("generativelanguage.googleapis.com")
     }
 
+    /// 移除部分推理模型夹带的思考过程，仅保留最终输出。
+    static func sanitizedModelOutput(_ text: String) -> String {
+        var result = text
+        let patterns = [
+            #"(?is)<think\b[^>]*>.*?</think\s*>"#,
+            #"(?is)<think\b[^>]*>.*$"#,
+            #"(?is)</?think\b[^>]*>"#
+        ]
+        for pattern in patterns {
+            result = result.replacingOccurrences(
+                of: pattern,
+                with: "",
+                options: .regularExpression
+            )
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     // MARK: - 翻译入口
 
     /// 翻译文本，自动检测方向：中文→英文，英文/其他→中文
     func translate(_ text: String) async throws -> (result: String, direction: String) {
         let apiURL = UserDefaults.standard.string(forKey: "translationAPIURL") ?? ""
-        let apiKey = UserDefaults.standard.string(forKey: "translationAPIKey") ?? ""
+        let apiKey = SecureCredentialStore.shared.value(for: "translationAPIKey") ?? ""
         let model = UserDefaults.standard.string(forKey: "translationModel") ?? "gpt-4o-mini"
 
         guard !apiURL.isEmpty, !apiKey.isEmpty else {
@@ -121,7 +139,9 @@ class TranslationService {
               let content = message["content"] as? String else {
             throw TranslationError.invalidResponse
         }
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result = Self.sanitizedModelOutput(content)
+        guard !result.isEmpty else { throw TranslationError.invalidResponse }
+        return result
     }
 
     // MARK: - Gemini
@@ -171,6 +191,8 @@ class TranslationService {
               let text = parts.first?["text"] as? String else {
             throw TranslationError.invalidResponse
         }
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result = Self.sanitizedModelOutput(text)
+        guard !result.isEmpty else { throw TranslationError.invalidResponse }
+        return result
     }
 }

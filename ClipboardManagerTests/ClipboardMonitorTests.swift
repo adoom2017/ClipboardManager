@@ -5,15 +5,27 @@ import AppKit
 final class ClipboardMonitorTests: XCTestCase {
 
     var clipboardMonitor: ClipboardMonitor!
+    var pasteboard: NSPasteboard!
 
     override func setUpWithError() throws {
         super.setUp()
-        clipboardMonitor = ClipboardMonitor()
+        guard let testPasteboard = NSPasteboard(
+            name: .init("ClipboardMonitorTests.\(UUID().uuidString)")
+        ) as NSPasteboard? else {
+            throw XCTSkip("当前测试宿主无法创建独立 NSPasteboard")
+        }
+        pasteboard = testPasteboard
+        clipboardMonitor = ClipboardMonitor(
+            store: ClipboardStore(inMemory: true),
+            pasteboard: pasteboard
+        )
     }
 
     override func tearDownWithError() throws {
-        clipboardMonitor.stopMonitoring()
+        UserDefaults.standard.removeObject(forKey: "isClipboardHistoryEnabled")
+        clipboardMonitor?.stopMonitoring()
         clipboardMonitor = nil
+        pasteboard = nil
         super.tearDown()
     }
 
@@ -31,7 +43,6 @@ final class ClipboardMonitorTests: XCTestCase {
             }
 
         // 写入剪贴板触发检测
-        let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString("Test String", forType: .string)
 
@@ -42,7 +53,6 @@ final class ClipboardMonitorTests: XCTestCase {
     func testDuplicateClipboardEntryNotStored() throws {
         clipboardMonitor.startMonitoring()
 
-        let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString("Duplicate Test", forType: .string)
 
@@ -60,7 +70,6 @@ final class ClipboardMonitorTests: XCTestCase {
     func testSourceAppRetrieval() throws {
         clipboardMonitor.startMonitoring()
 
-        let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString("Source App Test", forType: .string)
 
@@ -71,5 +80,25 @@ final class ClipboardMonitorTests: XCTestCase {
         if let item = clipboardMonitor.clipboardItems.first {
             XCTAssertFalse(item.sourceApp.isEmpty)
         }
+    }
+
+    func testDisabledHistoryDoesNotRecordClipboardChanges() throws {
+        UserDefaults.standard.set(false, forKey: "isClipboardHistoryEnabled")
+        clipboardMonitor.startMonitoring()
+
+        pasteboard.clearContents()
+        pasteboard.setString("Disabled History Test", forType: .string)
+
+        let exp = expectation(description: "Wait for polling interval")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { exp.fulfill() }
+        waitForExpectations(timeout: 2.0)
+
+        XCTAssertFalse(clipboardMonitor.clipboardItems.contains { $0.content == "Disabled History Test" })
+
+        UserDefaults.standard.set(true, forKey: "isClipboardHistoryEnabled")
+        let reenableExp = expectation(description: "Wait after re-enabling")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { reenableExp.fulfill() }
+        waitForExpectations(timeout: 2.0)
+        XCTAssertFalse(clipboardMonitor.clipboardItems.contains { $0.content == "Disabled History Test" })
     }
 }

@@ -45,6 +45,10 @@ class SyncService: ObservableObject {
     func syncItem(_ item: ClipboardItem, to peer: DiscoveredPeer) {
         guard item.contentType == .text else { return }
         clearSyncError()
+        guard let pin = SecureCredentialStore.shared.value(for: "syncPIN"), pin.count == 6 else {
+            syncErrorMessage = "请先在同步设置中配置 6 位同步 PIN。"
+            return
+        }
         log(.info, "syncItem itemID=\(item.id.uuidString) peer=\(peer.displayName) peerID=\(peer.peerID)")
 
         let nwConnection = discovery.connect(to: peer)
@@ -63,7 +67,7 @@ class SyncService: ObservableObject {
             guard let self, let connection else { return }
             let hello = SyncMessage(type: .hello, senderID: self.localID, senderName: self.localName)
             connection.send(message: hello)
-            self.sendItems([item], via: readyConnection)
+            self.sendItems([item], to: peer.peerID, pin: pin, via: readyConnection)
         }
         connection.onDisconnect = { [weak self] disconnected in
             guard let self else { return }
@@ -117,9 +121,16 @@ class SyncService: ObservableObject {
         case .hello:
             break
         case .items:
-            guard let payloadData = message.plainPayload,
+            guard let encryptedPayload = message.encryptedPayload,
+                  let pin = SecureCredentialStore.shared.value(for: "syncPIN"), pin.count == 6 else {
+                log(.warn, "reject unencrypted items payload from senderID=\(message.senderID)")
+                connection.cancel()
+                return
+            }
+            let key = SyncCrypto.deriveKey(pin: pin, localID: localID, remoteID: message.senderID)
+            guard let payloadData = try? SyncCrypto.decrypt(encryptedPayload, using: key),
                   let payload = try? JSONDecoder().decode(SyncItemsPayload.self, from: payloadData) else {
-                log(.warn, "failed to decode items payload from senderID=\(message.senderID)")
+                log(.warn, "failed to decrypt items payload from senderID=\(message.senderID)")
                 connection.cancel()
                 return
             }
@@ -144,7 +155,7 @@ class SyncService: ObservableObject {
         discovery.boostActivity()
     }
 
-    private func sendItems(_ items: [ClipboardItem], via connection: SyncConnection) {
+    private func sendItems(_ items: [ClipboardItem], to remoteID: String, pin: String, via connection: SyncConnection) {
         let syncItems = items.filter { $0.contentType == .text }.map {
             SyncClipboardItem(
                 id: $0.id.uuidString,
@@ -157,8 +168,14 @@ class SyncService: ObservableObject {
         guard !syncItems.isEmpty,
               let payload = try? JSONEncoder().encode(SyncItemsPayload(items: syncItems)) else { return }
 
+        let key = SyncCrypto.deriveKey(pin: pin, localID: localID, remoteID: remoteID)
+        guard let encryptedPayload = try? SyncCrypto.encrypt(payload, using: key) else {
+            syncErrorMessage = "无法加密同步内容。"
+            connection.cancel()
+            return
+        }
         var message = SyncMessage(type: .items, senderID: localID, senderName: localName)
-        message.plainPayload = payload
+        message.encryptedPayload = encryptedPayload
         connection.send(message: message)
     }
 

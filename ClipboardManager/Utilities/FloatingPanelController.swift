@@ -6,7 +6,7 @@ class FloatingPanelController: NSPanel {
 
     private init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 350, height: 450),
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 500),
             styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
             defer: false
@@ -30,7 +30,7 @@ class FloatingPanelController: NSPanel {
 
         // 用普通 NSView 做容器，避免 NSHostingView 直接作为 contentView
         // 时 AppKit 与 SwiftUI 布局系统互相触发 layoutSubtreeIfNeeded 的递归问题
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 350, height: 450))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 500))
         container.addSubview(hostingView)
         NSLayoutConstraint.activate([
             hostingView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -68,6 +68,7 @@ class FloatingPanelController: NSPanel {
     }
 
     func hidePanel() {
+        PreviewPanelController.shared.hide()
         orderOut(nil)
     }
 

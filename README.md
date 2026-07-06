@@ -1,39 +1,25 @@
-# Clipboard Manager
+# Clipboard Manager for macOS
 
-Clipboard Manager is a lightweight macOS menu bar application designed to enhance your clipboard experience by managing and storing clipboard history. This application allows users to easily access previously copied items, providing a seamless way to manage text, images, and files.
+SwiftUI + AppKit 菜单栏剪贴板管理器，是 `clipboard` 工作区的 macOS 客户端。
 
-## Features
+```bash
+xcodegen generate
+xcodebuild -project ClipboardManager.xcodeproj -scheme ClipboardManager -destination 'platform=macOS' build
+xcodebuild test -project ClipboardManager.xcodeproj -scheme ClipboardManager -destination 'platform=macOS'
+```
 
-- **Clipboard Monitoring**: Automatically tracks and records clipboard changes in real-time.
-- **History Management**: Stores clipboard history with options to limit the number of entries or the duration of storage.
-- **Smart Paste**: Quickly paste any item from the clipboard history with a single click or a global shortcut.
-- **Search Functionality**: Easily find specific clipboard entries using a search bar.
-- **Privacy Protection**: Automatically detects sensitive information and handles it securely.
-- **Customizable Interface**: A clean and intuitive UI that integrates with macOS's design language.
+正式版打包：
 
-## Installation
+```bash
+./scripts/build-release.sh
+```
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/ClipboardManager.git
-   ```
-2. Open the project in Xcode:
-   ```
-   open ClipboardManager.xcodeproj
-   ```
-3. Build and run the application.
+产物位于 `build/Release/`。Developer ID 签名和公证参数见[开发指南](../docs/development.md#macos-打包)。
 
-## Usage
+统一文档位于工作区根目录：
 
-- Launch the application from the menu bar.
-- Use the global shortcut `Option + V` to open the clipboard history.
-- Click on any item to paste it into the active application.
-- Use the search bar to filter through your clipboard history.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a pull request or open an issue for any suggestions or improvements.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for more details.
+- [项目总览](../README.md)
+- [用户指南](../docs/user-guide.md)
+- [系统架构](../docs/architecture.md)
+- [开发指南](../docs/development.md)
+- [同步协议](../docs/sync-protocol.md)

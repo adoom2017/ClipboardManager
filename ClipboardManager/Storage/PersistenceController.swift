@@ -3,12 +3,16 @@ import AppKit
 
 /// JSON 文件持久化控制器，替代 Core Data
 class PersistenceController {
-    static let shared = PersistenceController()
+    static let shared = PersistenceController(
+        inMemory: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    )
 
     private let fileURL: URL
     private let imageDir: URL
+    let isInMemory: Bool
 
     init(inMemory: Bool = false) {
+        isInMemory = inMemory
         if inMemory {
             fileURL  = URL(fileURLWithPath: "/dev/null")
             imageDir = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -25,6 +29,7 @@ class PersistenceController {
     // MARK: - Items
 
     func loadItems() -> [ClipboardItem] {
+        guard !isInMemory else { return [] }
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
         do {
             let data = try Data(contentsOf: fileURL)
@@ -38,6 +43,7 @@ class PersistenceController {
     }
 
     func saveItems(_ items: [ClipboardItem]) {
+        guard !isInMemory else { return }
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601

@@ -28,12 +28,13 @@ struct SettingsView: View {
                     Label("翻译", systemImage: "globe")
                 }
 
-            SyncView(viewModel: syncViewModel)
+            SyncView(viewModel: syncViewModel, settingsViewModel: viewModel)
                 .tabItem {
                     Label("同步", systemImage: "arrow.triangle.2.circlepath")
                 }
         }
         .frame(width: 420, height: 360)
+        .background(.ultraThinMaterial)
         .alert("无法更新开机启动", isPresented: $showLaunchAtLoginError) {
             Button("确定") {
                 viewModel.clearLaunchAtLoginError()

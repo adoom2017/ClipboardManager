@@ -2,10 +2,14 @@ import Foundation
 
 class PrivacyGuard {
     private var sensitiveApps: Set<String> = ["1Password", "Keychain Access", "LastPass", "Bitwarden"]
-    private var storedData: String?
-
-    func shouldRecordClipboardContent(from appName: String) -> Bool {
-        return !sensitiveApps.contains(appName)
+    func shouldRecordClipboardContent(from appName: String, content: String? = nil) -> Bool {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: "isPrivacyGuardEnabled") as? Bool ?? true else { return true }
+        guard !sensitiveApps.contains(where: { appName.localizedCaseInsensitiveContains($0) }) else {
+            return false
+        }
+        guard let content else { return true }
+        return !isSensitive(data: content)
     }
 
     func isSensitive(data: String) -> Bool {
@@ -15,29 +19,4 @@ class PrivacyGuard {
         return patterns.contains { lowered.contains($0) }
     }
 
-    func encryptSensitiveContent(_ content: String) -> String {
-        // 占位加密逻辑
-        return "Encrypted: \(content)"
-    }
-
-    func handleClipboardContent(_ content: String, from appName: String) -> String {
-        if shouldRecordClipboardContent(from: appName) {
-            return content
-        } else {
-            return encryptSensitiveContent(content)
-        }
-    }
-
-    func storeData(_ data: String) {
-        // 如果数据被检测为敏感数据，则不存储
-        if isSensitive(data: data) {
-            storedData = nil
-        } else {
-            storedData = data
-        }
-    }
-
-    func retrieveData() -> String? {
-        return storedData
-    }
 }

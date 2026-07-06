@@ -67,11 +67,6 @@ class SyncConnection {
         })
     }
 
-    /// 发送并自动加密 payload
-    func sendEncrypted(message: SyncMessage) {
-        send(message: message)
-    }
-
     // MARK: - 接收（帧读取循环）
 
     private func receiveNextFrame() {

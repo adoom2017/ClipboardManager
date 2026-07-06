@@ -3,17 +3,19 @@ import Foundation
 class ClipboardStore: ObservableObject {
     static let shared = ClipboardStore()
 
-    private let persistenceController = PersistenceController.shared
+    private let persistenceController: PersistenceController
     @Published var items: [ClipboardItem] = []
 
     private init() {
+        persistenceController = .shared
         items = persistenceController.loadItems()
+        applyRetentionPolicy()
     }
 
     /// 方便测试用的内部初始化
     init(inMemory: Bool) {
-        let controller = PersistenceController(inMemory: true)
-        items = controller.loadItems()
+        persistenceController = PersistenceController(inMemory: inMemory)
+        items = persistenceController.loadItems()
     }
 
     // MARK: - CRUD Operations
@@ -38,12 +40,12 @@ class ClipboardStore: ObservableObject {
         save()
     }
 
-    func saveItem(_ item: ClipboardItem) {
-        addItem(item)
+    func fetchAllItems() -> [ClipboardItem] {
+        items
     }
 
-    func fetchAllItems() -> [ClipboardItem] {
-        return items
+    var usesInMemoryPersistence: Bool {
+        persistenceController.isInMemory
     }
 
     func deleteItem(_ item: ClipboardItem) {
@@ -52,20 +54,10 @@ class ClipboardStore: ObservableObject {
         save()
     }
 
-    func deleteItems(at offsets: IndexSet) {
-        items.remove(atOffsets: offsets)
-        save()
-    }
-
     func clearAllItems() {
         let toRemove = items.filter { !$0.isPinned }
         deleteImageFiles(for: toRemove)
         items.removeAll { !$0.isPinned }
-        save()
-    }
-
-    func clearAll() {
-        items.removeAll()
         save()
     }
 
@@ -77,18 +69,6 @@ class ClipboardStore: ObservableObject {
         let unpinned = items.filter { !$0.isPinned }
         items = pinned + unpinned
         save()
-    }
-
-    func fetchAll() -> [ClipboardItem] {
-        return items
-    }
-
-    func add(_ item: ClipboardItem) {
-        addItem(item)
-    }
-
-    func remove(_ item: ClipboardItem) {
-        deleteItem(item)
     }
 
     // MARK: - Private
@@ -107,6 +87,17 @@ class ClipboardStore: ObservableObject {
             deleteImageFiles(for: toRemove)
             items.removeAll { item in toRemove.contains { $0.id == item.id } }
         }
+    }
+
+    func applyRetentionPolicy() {
+        let retainDays = UserDefaults.standard.integer(forKey: "retainDuration")
+        let days = retainDays > 0 ? retainDays : Constants.maxHistoryDays
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? .distantPast
+        let expired = items.filter { !$0.isPinned && $0.timestamp < cutoff }
+        deleteImageFiles(for: expired)
+        items.removeAll { item in expired.contains { $0.id == item.id } }
+        enforceLimit()
+        save()
     }
 
     /// 批量删除图片文件

@@ -1,77 +1,12 @@
-# Copilot Instructions
+# Copilot Instructions — macOS
 
-## Build & Test
+统一文档位于工作区 `../docs/`；优先阅读 `../docs/architecture.md`、`../docs/development.md` 和 `../docs/sync-protocol.md`。
 
-**Regenerate Xcode project** (after editing `project.yml`):
-```bash
-xcodegen generate
-```
+macOS 客户端红线：
 
-**Build from command line:**
-```bash
-xcodebuild -project ClipboardManager.xcodeproj -scheme ClipboardManager -configuration Debug build
-```
-
-**Run all tests:**
-```bash
-xcodebuild test -project ClipboardManager.xcodeproj -scheme ClipboardManagerTests -destination 'platform=macOS'
-```
-
-**Run a single test:**
-```bash
-xcodebuild test -project ClipboardManager.xcodeproj -scheme ClipboardManagerTests -destination 'platform=macOS' -only-testing:ClipboardManagerTests/ClipboardStoreTests
-```
-
-**Requirements:** macOS 14.0+, Xcode 15, Swift 5.9
-
-## Architecture
-
-MVVM + singleton service layer. SwiftUI handles all views; AppKit handles the menu bar (`MenuBarExtra`) and floating panel (`NSPanel`).
-
-```
-App/          → @main SwiftUI entry + NSApplicationDelegate
-Core/         → Singleton services (monitor, paste, privacy, translation)
-Models/       → ClipboardItem (Codable struct)
-Storage/      → In-memory store + JSON persistence
-ViewModels/   → ClipboardListViewModel, SettingsViewModel, SyncViewModel
-Views/        → SwiftUI views (+ TranslationWindowView, SyncView)
-Utilities/    → Constants, global hotkey (Carbon API), floating panel
-Extensions/   → NSPasteboard+, String+
-Sync/         → LAN sync: discovery (mDNS), connection, crypto (CryptoKit AES), messages
-```
-
-Data flow: `ClipboardMonitor` polls `NSPasteboard` every 0.5s → filters via `PrivacyGuard` → stores in `ClipboardStore` → Combine publishers drive `ClipboardListViewModel` → SwiftUI re-renders.
-
-Persistence: JSON at `~/Library/Application Support/ClipboardManager/clipboard_history.json` — no Core Data.
-
-## Key Conventions
-
-**Project configuration via XcodeGen:** Never edit `.xcodeproj` directly. All project structure changes go in `project.yml`, then run `xcodegen generate`.
-
-**Singletons accessed via `.shared`:** `ClipboardMonitor.shared`, `ClipboardStore.shared`, `AutoPasteService.shared`, `FloatingPanelController.shared`, `KeyboardShortcutManager.shared`, `SyncService.shared`. `PrivacyGuard` is stateless — instantiate directly, no singleton.
-
-**Code signing disabled:** `CODE_SIGNING_ALLOWED: false` and `CODE_SIGN_IDENTITY: "-"` — no certificates needed for local development.
-
-**Adding settings:** Add `@Published` property to `SettingsViewModel` (auto-syncs to `UserDefaults`), then add the corresponding control in `SettingsView`.
-
-**Extending the data model:** Always add default values to new `ClipboardItem` properties to maintain `Codable` backward compatibility with persisted JSON.
-
-**Auto-paste flow:** `AutoPasteService.autoPaste()` → primary: `CGEvent` (requires Accessibility permission) → fallback: AppleScript. Missing permission triggers a user-facing authorization prompt.
-
-**Global hotkey:** Registered via Carbon Events API in `KeyboardShortcutManager.registerGlobalShortcut()`. Default: ⌥V. Custom shortcuts persisted to `UserDefaults`.
-
-**Panel behavior:** `FloatingPanelController` uses `NSPanel` with `canBecomeKey = true` (allows search input) and `canBecomeMain = false` (doesn't steal app focus). Auto-hides on blur.
-
-**Privacy filtering:** `PrivacyGuard` blocks by source app name (case-insensitive) and content keywords (`password`, `secret`, `token`, `api_key`, `private_key`). Edit blocklists directly in `PrivacyGuard.swift`.
-
-**`PreviewPopover`** is implemented but not wired into any view — available for integration.
-
-**Use `LazyVStack` inside `ScrollView`, never SwiftUI `List`:** `List` wraps `NSTableView` which crashes inside `MenuBarExtra`. All clipboard list rendering uses `ScrollView + LazyVStack`.
-
-**`FloatingPanelController` owns its own `ClipboardListViewModel` instance**, separate from the `MenuBarExtra` view hierarchy. Changes to shared state go through `ClipboardStore`, not directly through a ViewModel.
-
-**Sync feature** (`Sync/`): LAN peer discovery via mDNS (`SyncDiscovery`), PIN-based pairing handshake, AES-encrypted messages (`SyncCrypto`), and manual/auto sync modes. Pair management and routing live in `SyncService.shared`.
-
-**Translation feature** (`Core/TranslationService.swift`): Calls a user-configurable OpenAI-compatible endpoint. Settings (URL, API key, model) are stored in `SettingsViewModel`. Results display in a separate floating window via `TranslationWindowController`.
-
-**Test isolation:** Pass `inMemory: true` to `ClipboardStore` (or `PersistenceController`) in test `setUp` to avoid touching the real JSON file on disk.
+- 工程结构由 `project.yml` 和 XcodeGen 管理，不手工编辑 `.xcodeproj`。
+- 历史状态通过 `ClipboardStore.shared` 共享；测试使用内存持久化，不能触碰真实历史。
+- `MenuBarExtra` 内的历史列表使用 `ScrollView + LazyVStack`，不要换回 SwiftUI `List`。
+- 普通设置存 `UserDefaults`；API Key 与同步 PIN 存 Keychain。
+- 同步只接受 `encryptedPayload`，协议变化必须同步 Windows 客户端和 `../docs/sync-protocol.md`。
+- 构建与测试命令以 `../docs/development.md` 为准，测试 scheme 是 `ClipboardManager`。

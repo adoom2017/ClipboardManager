@@ -10,11 +10,14 @@ class ClipboardMonitor: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var lastChangeCount: Int = 0
-    private let pasteboard = NSPasteboard.general
+    private let pasteboard: NSPasteboard
     private let privacyGuard = PrivacyGuard()
+    private let store: ClipboardStore
     private var timer: AnyCancellable?
 
-    init() {
+    init(store: ClipboardStore = .shared, pasteboard: NSPasteboard = .general) {
+        self.store = store
+        self.pasteboard = pasteboard
         lastChangeCount = pasteboard.changeCount
     }
 
@@ -32,6 +35,12 @@ class ClipboardMonitor: ObservableObject {
     }
 
     private func checkForNewClipboardContent() {
+        let historyEnabled = UserDefaults.standard.object(forKey: "isClipboardHistoryEnabled") as? Bool ?? true
+        guard historyEnabled else {
+            lastChangeCount = pasteboard.changeCount
+            return
+        }
+
         let currentChangeCount = pasteboard.changeCount
         guard currentChangeCount != lastChangeCount else { return }
         lastChangeCount = currentChangeCount
@@ -52,7 +61,7 @@ class ClipboardMonitor: ObservableObject {
 
         clipboardItems.insert(newItem, at: 0)
         newClipboardContent = newItem
-        ClipboardStore.shared.addItem(newItem)
+        store.addItem(newItem)
     }
 
     private func getClipboardContent() -> ClipboardItem? {
@@ -81,6 +90,7 @@ class ClipboardMonitor: ObservableObject {
         // 优先级 3：文本
         if let text = pasteboard.string(forType: .string),
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard privacyGuard.shouldRecordClipboardContent(from: sourceApp, content: text) else { return nil }
             return ClipboardItem(contentType: .text, content: text, sourceApp: sourceApp)
         }
 

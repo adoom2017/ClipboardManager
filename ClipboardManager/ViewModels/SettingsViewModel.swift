@@ -5,13 +5,16 @@ class SettingsViewModel: ObservableObject {
     private var isUpdatingLaunchAtLogin = false
 
     @Published var maxHistoryCount: Int {
-        didSet { UserDefaults.standard.set(maxHistoryCount, forKey: "maxHistoryCount") }
+        didSet {
+            UserDefaults.standard.set(maxHistoryCount, forKey: "maxHistoryCount")
+            ClipboardStore.shared.applyRetentionPolicy()
+        }
     }
     @Published var retainDuration: Int {
-        didSet { UserDefaults.standard.set(retainDuration, forKey: "retainDuration") }
-    }
-    @Published var isPrivacyModeEnabled: Bool {
-        didSet { UserDefaults.standard.set(isPrivacyModeEnabled, forKey: "isPrivacyModeEnabled") }
+        didSet {
+            UserDefaults.standard.set(retainDuration, forKey: "retainDuration")
+            ClipboardStore.shared.applyRetentionPolicy()
+        }
     }
     @Published var isClipboardHistoryEnabled: Bool {
         didSet { UserDefaults.standard.set(isClipboardHistoryEnabled, forKey: "isClipboardHistoryEnabled") }
@@ -43,25 +46,40 @@ class SettingsViewModel: ObservableObject {
         didSet { UserDefaults.standard.set(translationAPIURL, forKey: "translationAPIURL") }
     }
     @Published var translationAPIKey: String {
-        didSet { UserDefaults.standard.set(translationAPIKey, forKey: "translationAPIKey") }
+        didSet { SecureCredentialStore.shared.setValue(translationAPIKey, for: "translationAPIKey") }
     }
     @Published var translationModel: String {
         didSet { UserDefaults.standard.set(translationModel, forKey: "translationModel") }
+    }
+    @Published var syncPIN: String {
+        didSet {
+            let normalized = String(syncPIN.filter(\.isNumber).prefix(6))
+            if normalized != syncPIN {
+                syncPIN = normalized
+                return
+            }
+            SecureCredentialStore.shared.setValue(syncPIN, for: "syncPIN")
+        }
     }
 
     init() {
         let defaults = UserDefaults.standard
         self.maxHistoryCount = defaults.object(forKey: "maxHistoryCount") as? Int ?? 100
         self.retainDuration = defaults.object(forKey: "retainDuration") as? Int ?? 7
-        self.isPrivacyModeEnabled = defaults.bool(forKey: "isPrivacyModeEnabled")
         self.isClipboardHistoryEnabled = defaults.object(forKey: "isClipboardHistoryEnabled") as? Bool ?? true
-        self.isPrivacyGuardEnabled = defaults.bool(forKey: "isPrivacyGuardEnabled")
+        self.isPrivacyGuardEnabled = defaults.object(forKey: "isPrivacyGuardEnabled") as? Bool ?? true
         let launchAtLoginEnabled = LaunchAtLoginManager.shared.isEnabled
         self.launchAtLoginEnabled = launchAtLoginEnabled
         defaults.set(launchAtLoginEnabled, forKey: "launchAtLoginEnabled")
         self.translationAPIURL = defaults.string(forKey: "translationAPIURL") ?? "https://api.openai.com/v1"
-        self.translationAPIKey = defaults.string(forKey: "translationAPIKey") ?? ""
+        let legacyAPIKey = defaults.string(forKey: "translationAPIKey") ?? ""
+        self.translationAPIKey = SecureCredentialStore.shared.value(for: "translationAPIKey") ?? legacyAPIKey
+        if !legacyAPIKey.isEmpty {
+            SecureCredentialStore.shared.setValue(legacyAPIKey, for: "translationAPIKey")
+            defaults.removeObject(forKey: "translationAPIKey")
+        }
         self.translationModel = defaults.string(forKey: "translationModel") ?? "gpt-4o-mini"
+        self.syncPIN = SecureCredentialStore.shared.value(for: "syncPIN") ?? ""
     }
 
     func clearHistory() {
@@ -71,13 +89,13 @@ class SettingsViewModel: ObservableObject {
     func resetSettings() {
         maxHistoryCount = 100
         retainDuration = 7
-        isPrivacyModeEnabled = false
         isClipboardHistoryEnabled = true
-        isPrivacyGuardEnabled = false
+        isPrivacyGuardEnabled = true
         launchAtLoginEnabled = false
         translationAPIURL = "https://api.openai.com/v1"
         translationAPIKey = ""
         translationModel = "gpt-4o-mini"
+        syncPIN = ""
     }
 
     var launchAtLoginHint: String {

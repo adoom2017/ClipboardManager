@@ -1,99 +1,129 @@
 import SwiftUI
 
 struct ClipboardRowView: View {
-    var clipboardItem: ClipboardItem
-    var shortcutIndex: Int?
-    var isHovered: Bool = false
-    var onPin: (() -> Void)? = nil
+    let clipboardItem: ClipboardItem
+    let shortcutIndex: Int?
+    var isHovered = false
+    var onActivate: (() -> Void)?
+    var onActionHoverChanged: ((Bool) -> Void)?
+    var onPin: (() -> Void)?
+    var onDelete: (() -> Void)?
 
     @State private var thumbnail: NSImage?
     @ObservedObject private var syncService = SyncService.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(spacing: 8) {
-            // 左侧图片缩略图或文件图标
-            leadingView
+        HStack(spacing: 10) {
+            Button(action: { onActivate?() }) {
+                HStack(spacing: 10) {
+                    leadingView
 
-            // 右侧文字内容
-            VStack(alignment: .leading, spacing: 2) {
-                Text(clipboardItem.contentPreview)
-                    .font(.system(.body, design: .default))
-                    .lineLimit(2)
-                    .truncationMode(.tail)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(clipboardItem.contentPreview)
+                            .font(.callout)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                            .truncationMode(.tail)
 
-                HStack(spacing: 4) {
-                    Text(clipboardItem.sourceApp)
+                        HStack(spacing: 5) {
+                            Text(clipboardItem.sourceApp.isEmpty ? "未知来源" : clipboardItem.sourceApp)
+                            Circle()
+                                .fill(.tertiary)
+                                .frame(width: 2.5, height: 2.5)
+                            Text(clipboardItem.relativeTimeString)
+                        }
                         .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text("·")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text(clipboardItem.relativeTimeString)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 4)
                 }
+                .contentShape(.rect)
             }
+            .buttonStyle(.plain)
 
-            Spacer()
+            HStack(spacing: 2) {
+                if clipboardItem.contentType == .text {
+                    rowAction(systemImage: "globe", helpText: "翻译") {
+                        TranslationWindowController.shared.show(text: clipboardItem.content)
+                    }
+                    .opacity(isHovered ? 1 : 0)
+                    .allowsHitTesting(isHovered)
 
-            // 置顶按钮：已置顶时常驻，未置顶时 hover 显示
-            if clipboardItem.isPinned || isHovered {
-                Button(action: { onPin?() }) {
-                    Image(systemName: clipboardItem.isPinned ? "pin.fill" : "pin")
-                        .foregroundColor(clipboardItem.isPinned ? .orange : .secondary)
-                        .font(.caption)
-                }
-                .buttonStyle(.plain)
-                .help(clipboardItem.isPinned ? "取消置顶" : "置顶")
-            }
-
-            // 翻译按钮：hover 时显示，仅文本类型
-            if isHovered && clipboardItem.contentType == .text {
-                Button(action: {
-                    TranslationWindowController.shared.show(text: clipboardItem.content)
-                }) {
-                    Image(systemName: "globe")
-                        .foregroundColor(.secondary)
-                        .font(.caption)
-                }
-                .buttonStyle(.plain)
-                .help("翻译")
-
-                if isHovered && clipboardItem.contentType == .text {
                     syncAction
+                        .opacity(isHovered ? 1 : 0)
+                        .allowsHitTesting(isHovered)
                 }
-            }
 
-            // 快捷键索引已移除（⌘1-⌘9 功能未实现）
+                rowAction(
+                    systemImage: clipboardItem.isPinned ? "pin.fill" : "pin",
+                    helpText: clipboardItem.isPinned ? "取消置顶" : "置顶",
+                    tint: clipboardItem.isPinned ? .orange : nil
+                ) {
+                    onPin?()
+                }
+                .opacity(clipboardItem.isPinned || isHovered ? 1 : 0)
+                .allowsHitTesting(clipboardItem.isPinned || isHovered)
+
+                rowAction(systemImage: "trash", helpText: "删除", tint: isHovered ? .red : nil) {
+                    onDelete?()
+                }
+                .opacity(isHovered ? 1 : 0)
+                .allowsHitTesting(isHovered)
+            }
+            .frame(minWidth: clipboardItem.contentType == .text ? 96 : 50, alignment: .trailing)
+            .contentShape(.rect)
+            .onHover { hovering in
+                onActionHoverChanged?(hovering)
+            }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isHovered ? Color.accentColor.opacity(0.1) : Color.clear)
-        )
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 9)
+        .padding(.horizontal, 11)
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(isHovered ? Color.accentColor.opacity(0.08) : .clear)
+                .allowsHitTesting(false)
+        }
+        .adaptiveGlassSurface(cornerRadius: 14, interactive: true)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isHovered)
         .task(id: clipboardItem.id) {
-            // 异步加载图片缩略图，避免阻塞主线程
             guard clipboardItem.contentType == .image, let name = clipboardItem.imageName else { return }
             thumbnail = await Task.detached(priority: .utility) {
                 PersistenceController.shared.loadImage(named: name)
             }.value
         }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func rowAction(
+        systemImage: String,
+        helpText: String,
+        tint: Color? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(tint ?? .secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .background(isHovered ? Color.primary.opacity(0.055) : .clear, in: Circle())
+        .help(helpText)
+        .accessibilityLabel(helpText)
     }
 
     @ViewBuilder
     private var syncAction: some View {
         let peers = syncService.discoveredPeers
         if peers.count == 1, let peer = peers.first {
-            Button(action: {
+            rowAction(systemImage: "arrow.triangle.2.circlepath", helpText: "同步到 \(peer.displayName)") {
                 syncService.syncItem(clipboardItem, to: peer)
-            }) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
             }
-            .buttonStyle(.plain)
-            .help("同步到 \(peer.displayName)")
         } else if !peers.isEmpty {
             Menu {
                 ForEach(peers) { peer in
@@ -103,53 +133,54 @@ struct ClipboardRowView: View {
                 }
             } label: {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
             }
             .menuStyle(.borderlessButton)
             .help("选择同步目标")
+            .accessibilityLabel("选择同步目标")
         }
     }
-
-    // MARK: - Leading View
 
     @ViewBuilder
     private var leadingView: some View {
         switch clipboardItem.contentType {
         case .text:
-            EmptyView()
+            typeIcon(systemImage: "text.alignleft", tint: .blue)
         case .image:
             imageThumbnail
         case .file:
-            fileIcon
+            typeIcon(systemImage: fileIconName, tint: .purple)
         }
+    }
+
+    private func typeIcon(systemImage: String, tint: Color) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: 32, height: 32)
+            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .accessibilityHidden(true)
     }
 
     private var imageThumbnail: some View {
         Group {
-            if let img = thumbnail {
-                Image(nsImage: img)
+            if let thumbnail {
+                Image(nsImage: thumbnail)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 52, height: 40)
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
             } else {
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(Color.secondary.opacity(0.12))
-                    .frame(width: 52, height: 40)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .foregroundColor(.secondary)
-                    )
+                Image(systemName: "photo")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.green)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.green.opacity(0.12))
             }
         }
-    }
-
-    private var fileIcon: some View {
-        Image(systemName: fileIconName)
-            .font(.title2)
-            .foregroundColor(.accentColor)
-            .frame(width: 32, alignment: .center)
+        .frame(width: 36, height: 36)
+        .clipShape(.rect(cornerRadius: 9))
+        .accessibilityHidden(true)
     }
 
     private var fileIconName: String {

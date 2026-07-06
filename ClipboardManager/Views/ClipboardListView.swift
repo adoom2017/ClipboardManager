@@ -4,62 +4,30 @@ struct ClipboardListView: View {
     @ObservedObject var viewModel: ClipboardListViewModel
     @ObservedObject private var syncService = SyncService.shared
     @State private var hoveredItemId: UUID?
+    @State private var actionHoveredItemId: UUID?
+    @State private var previewedItem: ClipboardItem?
+    @State private var previewTask: Task<Void, Never>?
+    @State private var dismissPreviewTask: Task<Void, Never>?
 
     var body: some View {
-        // 使用 ScrollView + LazyVStack 替代 List，避免 NSTableView 在
-        // MenuBarExtra 窗口中引发约束更新无限循环导致崩溃的已知 SwiftUI bug
         ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(Array(viewModel.filteredItems.enumerated()), id: \.element.id) { index, item in
-                    ClipboardRowView(
-                        clipboardItem: item,
-                        shortcutIndex: nil,
-                        isHovered: hoveredItemId == item.id,
-                        onPin: { viewModel.togglePin(item) }
+            if viewModel.filteredItems.isEmpty {
+                ContentUnavailableView(
+                    viewModel.searchText.isEmpty ? "暂无剪贴板记录" : "没有匹配结果",
+                    systemImage: viewModel.searchText.isEmpty ? "clipboard" : "magnifyingglass",
+                    description: Text(
+                        viewModel.searchText.isEmpty
+                            ? "复制内容后会自动出现在这里"
+                            : "尝试搜索其他关键词"
                     )
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        viewModel.pasteItem(item)
-                    }
-                    .onHover { hovering in
-                        hoveredItemId = hovering ? item.id : nil
-                    }
-                    .contextMenu {
-                        Button(item.isPinned ? "取消置顶" : "置顶") {
-                            viewModel.togglePin(item)
-                        }
-                        if item.contentType == .text {
-                            Button("粘贴为纯文本") {
-                                AutoPasteService.shared.pasteAsPlainText(content: item.content)
-                            }
-                            Button("翻译") {
-                                TranslationWindowController.shared.show(text: item.content)
-                            }
-                            let peers = SyncService.shared.discoveredPeers
-                            if !peers.isEmpty {
-                                Menu("同步到设备") {
-                                    ForEach(peers) { peer in
-                                        Button(peer.displayName) {
-                                            SyncService.shared.syncItem(item, to: peer)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Divider()
-                        Button("删除", role: .destructive) {
-                            viewModel.deleteItem(item)
-                        }
-                    }
-
-                    if index < viewModel.filteredItems.count - 1 {
-                        Divider()
-                            .padding(.horizontal, 8)
-                    }
-                }
+                )
+                .frame(maxWidth: .infinity, minHeight: 280)
+            } else {
+                rows
             }
-            .padding(.vertical, 4)
         }
+        .scrollIndicators(.hidden)
+        .clipped()
         .alert(
             "同步失败",
             isPresented: Binding(
@@ -77,12 +45,154 @@ struct ClipboardListView: View {
         } message: {
             Text(syncService.syncErrorMessage ?? "同步失败，请稍后重试。")
         }
+        .onDisappear {
+            previewTask?.cancel()
+            dismissPreviewTask?.cancel()
+            PreviewPanelController.shared.hide()
+        }
+    }
+
+    private var rows: some View {
+        LazyVStack(spacing: 7) {
+            ForEach(viewModel.filteredItems) { item in
+                row(for: item)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 2)
+    }
+
+    private func row(for item: ClipboardItem) -> some View {
+        ClipboardRowView(
+            clipboardItem: item,
+            shortcutIndex: nil,
+            isHovered: hoveredItemId == item.id,
+            onActivate: { viewModel.pasteItem(item) },
+            onActionHoverChanged: { hovering in
+                handleActionHover(hovering, item: item)
+            },
+            onPin: { viewModel.togglePin(item) },
+            onDelete: { delete(item) }
+        )
+        .contentShape(.rect)
+        .onHover { hovering in
+            handleHover(hovering, item: item)
+        }
+        .contextMenu {
+            Button(item.isPinned ? "取消置顶" : "置顶") {
+                viewModel.togglePin(item)
+            }
+            if item.contentType == .text {
+                Button("粘贴为纯文本") {
+                    AutoPasteService.shared.pasteAsPlainText(content: item.content)
+                }
+                Button("翻译") {
+                    TranslationWindowController.shared.show(text: item.content)
+                }
+                let peers = SyncService.shared.discoveredPeers
+                if !peers.isEmpty {
+                    Menu("同步到设备") {
+                        ForEach(peers) { peer in
+                            Button(peer.displayName) {
+                                SyncService.shared.syncItem(item, to: peer)
+                            }
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("删除", role: .destructive) {
+                delete(item)
+            }
+        }
+    }
+
+    private func delete(_ item: ClipboardItem) {
+        previewTask?.cancel()
+        dismissPreviewTask?.cancel()
+        if hoveredItemId == item.id {
+            hoveredItemId = nil
+        }
+        if actionHoveredItemId == item.id {
+            actionHoveredItemId = nil
+        }
+        if previewedItem?.id == item.id {
+            previewedItem = nil
+            PreviewPanelController.shared.hide(itemID: item.id)
+        }
+        viewModel.deleteItem(item)
+    }
+
+    private func handleHover(_ hovering: Bool, item: ClipboardItem) {
+        if hovering {
+            hoveredItemId = item.id
+            dismissPreviewTask?.cancel()
+            schedulePreview(for: item)
+        } else {
+            if hoveredItemId == item.id {
+                hoveredItemId = nil
+            }
+            if actionHoveredItemId == item.id {
+                actionHoveredItemId = nil
+            }
+            previewTask?.cancel()
+            schedulePreviewDismissal(for: item.id)
+        }
+    }
+
+    private func handleActionHover(_ hovering: Bool, item: ClipboardItem) {
+        if hovering {
+            actionHoveredItemId = item.id
+            previewTask?.cancel()
+            dismissPreviewTask?.cancel()
+            if previewedItem?.id == item.id {
+                previewedItem = nil
+                PreviewPanelController.shared.hide(itemID: item.id)
+            }
+        } else {
+            if actionHoveredItemId == item.id {
+                actionHoveredItemId = nil
+            }
+            if hoveredItemId == item.id {
+                schedulePreview(for: item)
+            }
+        }
+    }
+
+    private func schedulePreview(for item: ClipboardItem) {
+        previewTask?.cancel()
+        previewTask = Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled,
+                  hoveredItemId == item.id,
+                  actionHoveredItemId != item.id else { return }
+            previewedItem = item
+            PreviewPanelController.shared.show(item: item) { hovering in
+                if hovering {
+                    dismissPreviewTask?.cancel()
+                } else {
+                    schedulePreviewDismissal(for: item.id)
+                }
+            }
+        }
+    }
+
+    private func schedulePreviewDismissal(for itemID: UUID) {
+        dismissPreviewTask?.cancel()
+        dismissPreviewTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled, hoveredItemId != itemID else { return }
+            if previewedItem?.id == itemID {
+                previewedItem = nil
+                PreviewPanelController.shared.hide(itemID: itemID)
+            }
+        }
     }
 }
 
 struct ClipboardListView_Previews: PreviewProvider {
     static var previews: some View {
         ClipboardListView(viewModel: ClipboardListViewModel())
-            .frame(width: 350, height: 400)
+            .frame(width: 360, height: 400)
     }
 }

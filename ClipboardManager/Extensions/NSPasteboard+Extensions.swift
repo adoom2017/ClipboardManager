@@ -1,22 +1,6 @@
 import Cocoa
 
 extension NSPasteboard {
-    /// 获取当前字符串内容
-    func getCurrentString() -> String? {
-        return string(forType: .string)
-    }
-
-    /// 设置字符串到剪贴板
-    func setClipboardString(_ string: String) {
-        clearContents()
-        setString(string, forType: .string)
-    }
-
-    /// 检查剪贴板是否包含字符串
-    func containsString() -> Bool {
-        return availableType(from: [.string]) != nil
-    }
-
     /// 获取当前图片内容
     func getCurrentImage() -> NSImage? {
         guard let objects = readObjects(forClasses: [NSImage.self], options: nil) else {
