@@ -93,27 +93,23 @@ struct PreviewPopover: View {
             Text("完整内容")
                 .font(.headline)
 
-            ScrollView {
-                previewContent
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-            }
-            .frame(minHeight: 80, maxHeight: 320)
-            .adaptiveGlassSurface(cornerRadius: 12)
-
             HStack {
-                Text("来源: \(clipboardItem.sourceApp)")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                Text(clipboardItem.sourceApp.isEmpty ? "未知来源" : clipboardItem.sourceApp)
                 Spacer()
                 Text(clipboardItem.relativeTimeString)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+
+            Divider()
+
+            previewViewport
         }
         .frame(width: 360)
         .padding(14)
-        .background(.ultraThinMaterial)
+        .adaptiveGlassSurface(cornerRadius: 18, prominent: true)
+        .clipShape(.rect(cornerRadius: 18))
+        .padding(6)
         .onHover { hovering in
             onHoverChanged?(hovering)
         }
@@ -127,28 +123,55 @@ struct PreviewPopover: View {
     }
 
     @ViewBuilder
-    private var previewContent: some View {
+    private var previewViewport: some View {
         switch clipboardItem.contentType {
         case .text:
-            Text(clipboardItem.content)
-                .font(.body)
-                .textSelection(.enabled)
+            ScrollView {
+                Text(clipboardItem.content)
+                    .font(.body)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 2)
+            }
+            .frame(minHeight: 80, maxHeight: 320)
         case .image:
             if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
+                GeometryReader { geometry in
+                    ScrollView(.vertical) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .frame(
+                                width: geometry.size.width,
+                                height: fittedImageHeight(
+                                    imageSize: image.size,
+                                    width: geometry.size.width
+                                )
+                            )
+                            .accessibilityLabel("剪贴板图片完整预览")
+                    }
+                }
+                .frame(height: 300)
             } else {
                 ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 80)
+                    .frame(maxWidth: .infinity, minHeight: 300)
             }
         case .file:
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(clipboardItem.fileURLs ?? [], id: \.self) { urlString in
-                    Text(URL(string: urlString)?.path ?? urlString)
-                        .textSelection(.enabled)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(clipboardItem.fileURLs ?? [], id: \.self) { urlString in
+                        Text(URL(string: urlString)?.path ?? urlString)
+                            .textSelection(.enabled)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 2)
             }
+            .frame(minHeight: 80, maxHeight: 320)
         }
+    }
+
+    private func fittedImageHeight(imageSize: NSSize, width: CGFloat) -> CGFloat {
+        guard imageSize.width > 0, imageSize.height > 0 else { return width }
+        return width * imageSize.height / imageSize.width
     }
 }

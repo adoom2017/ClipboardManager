@@ -83,11 +83,17 @@ struct ClipboardRowView: View {
         .padding(.vertical, 9)
         .padding(.horizontal, 11)
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isHovered ? Color.accentColor.opacity(0.08) : .clear)
                 .allowsHitTesting(false)
         }
-        .adaptiveGlassSurface(cornerRadius: 14, interactive: true)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.08))
+                .frame(height: 0.5)
+                .padding(.leading, 52)
+        }
+        .contentShape(.rect(cornerRadius: 10))
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isHovered)
         .task(id: clipboardItem.id) {
             guard clipboardItem.contentType == .image, let name = clipboardItem.imageName else { return }

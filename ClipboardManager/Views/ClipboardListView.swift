@@ -53,7 +53,7 @@ struct ClipboardListView: View {
     }
 
     private var rows: some View {
-        LazyVStack(spacing: 7) {
+        LazyVStack(spacing: 2) {
             ForEach(viewModel.filteredItems) { item in
                 row(for: item)
             }

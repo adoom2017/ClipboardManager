@@ -18,7 +18,9 @@ struct MenuBarView: View {
 
             panelContent
         }
-        .background(.ultraThinMaterial)
+        .adaptiveGlassSurface(cornerRadius: 20, prominent: true)
+        .clipShape(.rect(cornerRadius: 20))
+        .padding(6)
     }
 
     private var panelContent: some View {
@@ -86,14 +88,10 @@ struct MenuBarView: View {
         .padding(.trailing, 6)
         .frame(height: 42)
 
-        if #available(macOS 26.0, *) {
-            content
-                .buttonStyle(.glass)
-                .glassEffect(.regular, in: .rect(cornerRadius: 14))
-        } else {
-            content
-                .buttonStyle(.borderless)
-                .adaptiveGlassSurface(cornerRadius: 14)
-        }
+        content
+            .buttonStyle(.borderless)
+            .overlay(alignment: .top) {
+                Divider()
+            }
     }
 }
