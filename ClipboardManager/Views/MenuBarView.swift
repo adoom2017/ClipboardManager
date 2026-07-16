@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MenuBarView: View {
+    @Environment(\.openSettings) private var openSettings
     @ObservedObject var clipboardListViewModel: ClipboardListViewModel
 
     var body: some View {
@@ -24,74 +25,61 @@ struct MenuBarView: View {
     }
 
     private var panelContent: some View {
-        VStack(spacing: 10) {
-            header
+        VStack(spacing: 8) {
+            topBar
+            listSection
+        }
+        .padding(8)
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 8) {
             SearchBarView(searchText: $clipboardListViewModel.searchText)
-                .zIndex(1)
-            ClipboardListView(viewModel: clipboardListViewModel)
-            footer
-        }
-        .padding(10)
-    }
 
-    private var header: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "doc.on.clipboard.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.tint)
-                .frame(width: 30, height: 30)
-                .adaptiveGlassIconControl(tint: Color.accentColor.opacity(0.16))
+            GlassIconButton(systemImage: "gearshape", helpText: "设置", action: openSettingsWindow)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("剪贴板")
-                    .font(.headline)
-                Text("\(clipboardListViewModel.filteredItems.count) 条记录")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .contentTransition(.numericText())
-            }
-
-            Spacer()
-
-            Text("⌥V")
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .adaptiveGlassSurface(cornerRadius: 9)
-        }
-        .padding(.horizontal, 2)
-    }
-
-    @ViewBuilder
-    private var footer: some View {
-        let content = HStack(spacing: 8) {
-            Button(role: .destructive) {
-                clipboardListViewModel.clearAllItems()
-            } label: {
-                Label("清空", systemImage: "trash")
-                    .font(.caption.weight(.medium))
-            }
-            .help("清空未置顶的历史记录")
-
-            Spacer()
-
-            GlassIconButton(systemImage: "gearshape", helpText: "设置", usesGlass: false) {
-                NotificationCenter.default.post(name: .openSettingsRequest, object: nil)
-            }
-
-            GlassIconButton(systemImage: "power", helpText: "退出", usesGlass: false) {
+            GlassIconButton(systemImage: "power", helpText: "退出") {
                 NSApplication.shared.terminate(nil)
             }
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 6)
-        .frame(height: 42)
+        .buttonStyle(.borderless)
+        .zIndex(1)
+    }
 
-        content
-            .buttonStyle(.borderless)
-            .overlay(alignment: .top) {
-                Divider()
-            }
+    private var listSection: some View {
+        VStack(spacing: 0) {
+            Text("\(clipboardListViewModel.filteredItems.count) 条记录")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+                .contentTransition(.numericText())
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .frame(height: 28)
+
+            Divider()
+                .opacity(0.65)
+
+            ClipboardListView(viewModel: clipboardListViewModel)
+                .padding(4)
+        }
+        .frame(maxHeight: .infinity)
+        .panelSectionSurface(cornerRadius: 15, fillOpacity: 0.42)
+    }
+
+    private func openSettingsWindow() {
+        FloatingPanelController.shared.hidePanel()
+        NSApp.activate(ignoringOtherApps: true)
+        openSettings()
+
+        // Settings 场景可能在本次事件循环结束时才创建窗口。
+        // 再次激活可确保菜单栏应用的新窗口成为 key window。
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.first(where: { window in
+                window.isVisible
+                    && window !== FloatingPanelController.shared
+                    && window.canBecomeKey
+            })?.makeKeyAndOrderFront(nil)
+        }
     }
 }

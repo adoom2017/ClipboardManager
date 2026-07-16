@@ -1,6 +1,22 @@
 import SwiftUI
 
 extension View {
+    func panelSectionSurface(
+        cornerRadius: CGFloat = 14,
+        tint: Color = Color(nsColor: .controlBackgroundColor),
+        fillOpacity: Double = 0.56
+    ) -> some View {
+        background(
+            tint.opacity(fillOpacity),
+            in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.11), lineWidth: 0.75)
+        }
+        .shadow(color: .black.opacity(0.035), radius: 3, y: 1)
+    }
+
     @ViewBuilder
     func adaptiveGlassSurface(
         cornerRadius: CGFloat = 16,

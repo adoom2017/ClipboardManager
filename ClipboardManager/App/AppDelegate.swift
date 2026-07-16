@@ -26,12 +26,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 菜单栏图标与全局快捷键共用同一个浮动面板。
         configureStatusItem()
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(openSettings),
-            name: .openSettingsRequest,
-            object: nil
-        )
 
         // 检查辅助功能权限，未授权时只触发系统弹窗。
         // 用户实际粘贴失败时，再由 AutoPasteService 显示应用内引导。
@@ -72,12 +66,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleClipboardPanel() {
         FloatingPanelController.shared.togglePanel()
-    }
-
-    @objc private func openSettings() {
-        FloatingPanelController.shared.hidePanel()
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     // MARK: - 辅助功能权限

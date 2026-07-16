@@ -28,5 +28,11 @@ struct SearchBarView: View {
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, minHeight: 38, maxHeight: 38)
         .adaptiveGlassSurface(cornerRadius: 13, interactive: true)
+        .overlay {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.75)
+                .allowsHitTesting(false)
+        }
+        .shadow(color: .black.opacity(0.04), radius: 3, y: 1)
     }
 }
