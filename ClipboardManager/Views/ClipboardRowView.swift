@@ -4,6 +4,7 @@ struct ClipboardRowView: View {
     let clipboardItem: ClipboardItem
     let shortcutIndex: Int?
     var isHovered = false
+    var isKeyboardSelected = false
     var onActivate: (() -> Void)?
     var onActionHoverChanged: ((Bool) -> Void)?
     var onPin: (() -> Void)?
@@ -83,9 +84,20 @@ struct ClipboardRowView: View {
         .padding(.vertical, 9)
         .padding(.horizontal, 11)
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isHovered ? Color.accentColor.opacity(0.08) : .clear)
-                .allowsHitTesting(false)
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        isKeyboardSelected
+                            ? Color.accentColor.opacity(0.12)
+                            : isHovered ? Color.accentColor.opacity(0.08) : .clear
+                    )
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        isKeyboardSelected ? Color.accentColor.opacity(0.65) : .clear,
+                        lineWidth: 1
+                    )
+            }
+            .allowsHitTesting(false)
         }
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -95,6 +107,7 @@ struct ClipboardRowView: View {
         }
         .contentShape(.rect(cornerRadius: 10))
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isHovered)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isKeyboardSelected)
         .task(id: clipboardItem.id) {
             guard clipboardItem.contentType == .image, let name = clipboardItem.imageName else { return }
             thumbnail = await Task.detached(priority: .utility) {
@@ -102,6 +115,7 @@ struct ClipboardRowView: View {
             }.value
         }
         .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(isKeyboardSelected ? [.isSelected] : [])
     }
 
     private func rowAction(

@@ -65,6 +65,7 @@ class FloatingPanelController: NSPanel {
         // NSPanel 的 .nonactivatingPanel 保证不会激活（切换）当前前台应用
         orderFrontRegardless()
         makeKey()
+        NotificationCenter.default.post(name: .clipboardPanelDidShow, object: nil)
     }
 
     func hidePanel() {
@@ -81,4 +82,8 @@ class FloatingPanelController: NSPanel {
         super.resignKey()
         hidePanel()
     }
+}
+
+extension Notification.Name {
+    static let clipboardPanelDidShow = Notification.Name("clipboardPanelDidShow")
 }

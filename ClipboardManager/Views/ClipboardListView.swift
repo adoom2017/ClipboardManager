@@ -8,26 +8,62 @@ struct ClipboardListView: View {
     @State private var previewedItem: ClipboardItem?
     @State private var previewTask: Task<Void, Never>?
     @State private var dismissPreviewTask: Task<Void, Never>?
+    @State private var selection = ClipboardSelectionController()
+    @FocusState private var isListFocused: Bool
+
+    private var selectedItemID: UUID? {
+        selection.selectedID(in: viewModel.filteredItems)
+    }
 
     var body: some View {
-        ScrollView {
-            if viewModel.filteredItems.isEmpty {
-                ContentUnavailableView(
-                    viewModel.searchText.isEmpty ? "暂无剪贴板记录" : "没有匹配结果",
-                    systemImage: viewModel.searchText.isEmpty ? "clipboard" : "magnifyingglass",
-                    description: Text(
-                        viewModel.searchText.isEmpty
-                            ? "复制内容后会自动出现在这里"
-                            : "尝试搜索其他关键词"
+        ScrollViewReader { proxy in
+            ScrollView {
+                if viewModel.filteredItems.isEmpty {
+                    ContentUnavailableView(
+                        viewModel.searchText.isEmpty ? "暂无剪贴板记录" : "没有匹配结果",
+                        systemImage: viewModel.searchText.isEmpty ? "clipboard" : "magnifyingglass",
+                        description: Text(
+                            viewModel.searchText.isEmpty
+                                ? "复制内容后会自动出现在这里"
+                                : "尝试搜索其他关键词"
+                        )
                     )
-                )
-                .frame(maxWidth: .infinity, minHeight: 280)
-            } else {
-                rows
+                    .frame(maxWidth: .infinity, minHeight: 280)
+                } else {
+                    rows
+                }
+            }
+            .onChange(of: selectedItemID) { _, itemID in
+                guard let itemID else { return }
+                withAnimation(.easeOut(duration: 0.12)) {
+                    proxy.scrollTo(itemID, anchor: .center)
+                }
             }
         }
         .scrollIndicators(.hidden)
         .clipped()
+        .focusable(interactions: .edit)
+        .focused($isListFocused)
+        .defaultFocus($isListFocused, true)
+        .focusEffectDisabled()
+        .onKeyPress(.downArrow) {
+            moveSelection(by: 1)
+            return .handled
+        }
+        .onKeyPress(.upArrow) {
+            moveSelection(by: -1)
+            return .handled
+        }
+        .onKeyPress(.return) {
+            pasteSelectedItem()
+            return .handled
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .clipboardPanelDidShow)) { _ in
+            isListFocused = true
+        }
+        .onChange(of: viewModel.searchText) {
+            selection.reset()
+        }
         .alert(
             "同步失败",
             isPresented: Binding(
@@ -56,6 +92,7 @@ struct ClipboardListView: View {
         LazyVStack(spacing: 2) {
             ForEach(viewModel.filteredItems) { item in
                 row(for: item)
+                    .id(item.id)
             }
         }
         .frame(maxWidth: .infinity)
@@ -67,6 +104,7 @@ struct ClipboardListView: View {
             clipboardItem: item,
             shortcutIndex: nil,
             isHovered: hoveredItemId == item.id,
+            isKeyboardSelected: selectedItemID == item.id,
             onActivate: { viewModel.pasteItem(item) },
             onActionHoverChanged: { hovering in
                 handleActionHover(hovering, item: item)
@@ -105,6 +143,15 @@ struct ClipboardListView: View {
                 delete(item)
             }
         }
+    }
+
+    private func moveSelection(by offset: Int) {
+        selection.move(in: viewModel.filteredItems, by: offset)
+    }
+
+    private func pasteSelectedItem() {
+        guard let item = selection.selectedItem(in: viewModel.filteredItems) else { return }
+        viewModel.pasteItem(item)
     }
 
     private func delete(_ item: ClipboardItem) {
