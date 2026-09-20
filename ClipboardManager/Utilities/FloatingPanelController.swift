@@ -82,6 +82,35 @@ class FloatingPanelController: NSPanel {
         super.resignKey()
         hidePanel()
     }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown {
+            // A borderless panel with movable-by-background enabled otherwise
+            // treats a drag that starts in the SwiftUI list as a panel move.
+            // Let the native scroll view consume those drags instead.
+            isMovableByWindowBackground = !isInsideScrollView(at: event.locationInWindow)
+        } else if event.type == .leftMouseUp {
+            // Keep the setting in sync after AppKit ends a drag.
+            isMovableByWindowBackground = true
+        }
+
+        super.sendEvent(event)
+    }
+
+    private func isInsideScrollView(at windowPoint: NSPoint) -> Bool {
+        guard let contentView else { return false }
+        let contentPoint = contentView.convert(windowPoint, from: nil)
+        var view = contentView.hitTest(contentPoint)
+
+        while let currentView = view {
+            if currentView is NSScrollView {
+                return true
+            }
+            view = currentView.superview
+        }
+
+        return false
+    }
 }
 
 extension Notification.Name {

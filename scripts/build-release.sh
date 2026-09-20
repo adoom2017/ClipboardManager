@@ -62,11 +62,27 @@ elif [[ -n "${DEVELOPMENT_TEAM:-}" ]]; then
   build_args+=(DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM")
 fi
 
+if [[ "$SIGNING_IDENTITY" != "-" ]]; then
+  build_args+=(OTHER_CODE_SIGN_FLAGS=--timestamp)
+fi
+
 xcodebuild "${build_args[@]}"
 
 if [[ ! -d "$APP_PATH" ]]; then
   echo "error: expected app not found at $APP_PATH" >&2
   exit 1
+fi
+
+if [[ "$SIGNING_IDENTITY" != "-" ]]; then
+  echo "==> Applying Developer ID signature with secure timestamp"
+  codesign \
+    --force \
+    --deep \
+    --options runtime \
+    --timestamp \
+    --entitlements "$REPO_ROOT/ClipboardManager/Resources/ClipboardManager.entitlements" \
+    --sign "$SIGNING_IDENTITY" \
+    "$APP_PATH"
 fi
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")"
@@ -77,6 +93,14 @@ CHECKSUM_PATH="${ZIP_PATH}.sha256"
 
 echo "==> Verifying code signature"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+if [[ "$SIGNING_IDENTITY" != "-" ]]; then
+  SIGNATURE_DETAILS="$(codesign -dvvv "$APP_PATH" 2>&1)"
+  if ! print -r -- "$SIGNATURE_DETAILS" | grep '^Timestamp=' >/dev/null; then
+    echo "error: app signature does not contain a secure timestamp" >&2
+    echo "       ensure the Developer ID certificate is available and signing uses --timestamp" >&2
+    exit 1
+  fi
+fi
 
 echo "==> Packaging $ARTIFACT_NAME"
 mkdir -p "$OUTPUT_DIR"

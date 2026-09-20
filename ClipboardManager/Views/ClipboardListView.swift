@@ -40,7 +40,8 @@ struct ClipboardListView: View {
                 }
             }
         }
-        .scrollIndicators(.hidden)
+        // Keep the native scrollbar available so it can be dragged directly.
+        .scrollIndicators(.visible)
         .clipped()
         .focusable(interactions: .edit)
         .focused($isListFocused)
