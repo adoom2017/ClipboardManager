@@ -88,12 +88,12 @@ struct ClipboardRowView: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(
                         isKeyboardSelected
-                            ? Color.accentColor.opacity(0.12)
-                            : isHovered ? Color.accentColor.opacity(0.08) : .clear
+                            ? Color.accentColor.opacity(0.16)
+                            : isHovered ? Color.white.opacity(0.10) : .clear
                     )
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(
-                        isKeyboardSelected ? Color.accentColor.opacity(0.65) : .clear,
+                        isKeyboardSelected ? Color.accentColor.opacity(0.72) : .clear,
                         lineWidth: 1
                     )
             }
@@ -180,7 +180,11 @@ struct ClipboardRowView: View {
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(tint)
             .frame(width: 32, height: 32)
-            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(tint.opacity(0.18), lineWidth: 0.5)
+            }
             .accessibilityHidden(true)
     }
 

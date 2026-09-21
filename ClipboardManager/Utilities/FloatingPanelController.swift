@@ -19,6 +19,10 @@ class FloatingPanelController: NSPanel {
         self.collectionBehavior = [.transient, .ignoresCycle]
         self.animationBehavior = .utilityWindow
         self.backgroundColor = .clear
+        self.isOpaque = false
+        // SwiftUI draws the single rounded glass surface edge-to-edge.
+        // Do not add a rectangular window shadow around it.
+        self.hasShadow = false
         // 允许面板在非活跃应用时也接收鼠标事件
         self.hidesOnDeactivate = false
         // 不设置 becomesKeyOnlyIfNeeded，确保点击任何区域都能立即响应

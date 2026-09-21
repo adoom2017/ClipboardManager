@@ -6,33 +6,40 @@ struct SyncView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("设备会在局域网内自动发现。两端配置相同的 6 位 PIN 后，文本会通过 AES-GCM 加密传输。")
-                .font(.callout)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 12) {
+                Label("局域网同步", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.headline)
+                Text("设备会在局域网内自动发现。两端配置相同的 6 位 PIN 后，文本会通过 AES-GCM 加密传输。")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            Divider()
+                Divider()
 
-            HStack {
-                Text("同步 PIN")
-                SecureField("6 位数字", text: $settingsViewModel.syncPIN)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 120)
-                Spacer()
-                Text(settingsViewModel.syncPIN.count == 6 ? "已配置" : "未配置")
+                HStack {
+                    Text("同步 PIN")
+                    SecureField("6 位数字", text: $settingsViewModel.syncPIN)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 120)
+                    Spacer()
+                    Label(
+                        settingsViewModel.syncPIN.count == 6 ? "已配置" : "未配置",
+                        systemImage: settingsViewModel.syncPIN.count == 6 ? "checkmark.circle.fill" : "circle"
+                    )
                     .font(.caption)
                     .foregroundStyle(settingsViewModel.syncPIN.count == 6 ? .green : .secondary)
+                }
             }
-
-            Divider()
+            .padding(15)
+            .panelSectionSurface(cornerRadius: 15, fillOpacity: 0.30)
 
             HStack {
-                Text("已发现服务")
+                Label("已发现服务", systemImage: "bonjour")
                     .font(.headline)
                 Spacer()
                 Text("\(viewModel.discoveredPeers.count)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
             }
 
             if viewModel.discoveredPeers.isEmpty {
@@ -61,6 +68,7 @@ struct SyncView: View {
                     .padding(.vertical, 2)
                 }
                 .listStyle(.inset)
+                .panelSectionSurface(cornerRadius: 15, fillOpacity: 0.26)
             }
         }
         .padding(20)

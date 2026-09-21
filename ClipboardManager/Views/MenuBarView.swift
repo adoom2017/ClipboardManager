@@ -5,40 +5,29 @@ struct MenuBarView: View {
     @ObservedObject var clipboardListViewModel: ClipboardListViewModel
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color.accentColor.opacity(0.12),
-                    Color.clear,
-                    Color.indigo.opacity(0.06)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            panelContent
-        }
-        .adaptiveGlassSurface(cornerRadius: 20, prominent: true)
-        .clipShape(.rect(cornerRadius: 20))
-        .padding(6)
+        panelContent
+            .adaptiveGlassSurface(cornerRadius: 20)
+            .clipShape(.rect(cornerRadius: 20))
     }
 
     private var panelContent: some View {
+        // One continuous glass surface; content must not cover it with a
+        // second material, opaque window color, or inset rounded card.
         VStack(spacing: 8) {
             topBar
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
             listSection
         }
-        .padding(8)
     }
 
     private var topBar: some View {
         HStack(spacing: 8) {
             SearchBarView(searchText: $clipboardListViewModel.searchText)
 
-            GlassIconButton(systemImage: "gearshape", helpText: "设置", action: openSettingsWindow)
+            GlassIconButton(systemImage: "gearshape", helpText: "设置", usesGlass: false, action: openSettingsWindow)
 
-            GlassIconButton(systemImage: "power", helpText: "退出") {
+            GlassIconButton(systemImage: "power", helpText: "退出", usesGlass: false) {
                 NSApplication.shared.terminate(nil)
             }
         }
@@ -63,7 +52,6 @@ struct MenuBarView: View {
                 .padding(4)
         }
         .frame(maxHeight: .infinity)
-        .panelSectionSurface(cornerRadius: 15, fillOpacity: 0.42)
     }
 
     private func openSettingsWindow() {

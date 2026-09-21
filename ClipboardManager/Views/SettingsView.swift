@@ -34,6 +34,7 @@ struct SettingsView: View {
                 }
         }
         .frame(width: 420, height: 360)
+        .glassBackdrop()
         .background(.ultraThinMaterial)
         .alert("无法更新开机启动", isPresented: $showLaunchAtLoginError) {
             Button("确定") {
@@ -50,44 +51,35 @@ struct SettingsView: View {
     // MARK: - 通用设置
     private var generalTab: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Toggle("启用剪贴板历史记录", isOn: $viewModel.isClipboardHistoryEnabled)
+            settingCard {
+                Toggle("启用剪贴板历史记录", isOn: $viewModel.isClipboardHistoryEnabled)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Toggle("开机时自动启动", isOn: $viewModel.launchAtLoginEnabled)
-                Text(viewModel.launchAtLoginHint)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack {
-                Text("最大历史条数:")
-                Spacer()
-                Stepper("\(viewModel.maxHistoryCount)",
-                        value: $viewModel.maxHistoryCount, in: 10...500, step: 10)
-            }
-
-            HStack {
-                Text("保留天数:")
-                Spacer()
-                Stepper("\(viewModel.retainDuration) 天",
-                        value: $viewModel.retainDuration, in: 1...365)
-            }
-
-            Divider()
-
-            HStack {
-                Button("清空所有历史") {
-                    viewModel.clearHistory()
-                }
-                .foregroundColor(.red)
-
-                Spacer()
-
-                Button("重置设置") {
-                    viewModel.resetSettings()
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("开机时自动启动", isOn: $viewModel.launchAtLoginEnabled)
+                    Text(viewModel.launchAtLoginHint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            settingCard {
+                settingStepper(title: "最大历史条数", value: "\(viewModel.maxHistoryCount)") {
+                    Stepper("", value: $viewModel.maxHistoryCount, in: 10...500, step: 10)
+                        .labelsHidden()
+                }
+                settingStepper(title: "保留天数", value: "\(viewModel.retainDuration) 天") {
+                    Stepper("", value: $viewModel.retainDuration, in: 1...365)
+                        .labelsHidden()
+                }
+            }
+
+            HStack {
+                Button("清空所有历史", role: .destructive) { viewModel.clearHistory() }
+                Spacer()
+                Button("重置设置") { viewModel.resetSettings() }
+            }
+            .buttonStyle(.bordered)
         }
         .padding(20)
     }
@@ -95,30 +87,27 @@ struct SettingsView: View {
     // MARK: - 快捷键设置
     private var shortcutTab: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("全局快捷键")
-                .font(.headline)
+            settingCard {
+                Label("全局快捷键", systemImage: "keyboard")
+                    .font(.headline)
+                Text("按下快捷键可以在任何应用中唤出剪贴板历史面板")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
 
-            Text("按下快捷键可以在任何应用中唤出剪贴板历史面板")
-                .font(.callout)
-                .foregroundColor(.secondary)
-
-            HStack(spacing: 12) {
-                Text("唤出历史记录:")
-
-                // 快捷键录制按钮
-                ShortcutRecorderView(shortcutManager: shortcutManager)
-
-                Button("恢复默认") {
-                    shortcutManager.resetToDefault()
+                HStack(spacing: 12) {
+                    Text("唤出历史记录")
+                    Spacer()
+                    ShortcutRecorderView(shortcutManager: shortcutManager)
+                    Button("恢复默认") { shortcutManager.resetToDefault() }
+                        .font(.caption)
                 }
-                .font(.caption)
             }
 
             Spacer()
 
             Text("提示: 默认快捷键为 ⌥V (Option + V)")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .padding(20)
     }
@@ -126,12 +115,13 @@ struct SettingsView: View {
     // MARK: - 隐私设置
     private var privacyTab: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Toggle("启用隐私保护", isOn: $viewModel.isPrivacyGuardEnabled)
-
-            Text("开启后，来自 1Password、钥匙串访问等密码管理器的剪贴板内容将不被记录。")
-                .font(.callout)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            settingCard {
+                Toggle("启用隐私保护", isOn: $viewModel.isPrivacyGuardEnabled)
+                Text("开启后，来自 1Password、钥匙串访问等密码管理器的剪贴板内容将不被记录。")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Spacer()
         }
@@ -141,41 +131,60 @@ struct SettingsView: View {
     // MARK: - 翻译设置
     private var translationTab: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("使用 OpenAI 兼容接口进行翻译，支持 OpenAI、DeepSeek、Groq、Ollama 等。")
-                .font(.callout)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            settingCard {
+                Text("使用 OpenAI 兼容接口进行翻译，支持 OpenAI、DeepSeek、Groq、Ollama 等。")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            Divider()
+                Divider()
 
-            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 10, verticalSpacing: 10) {
-                GridRow {
-                    Text("API 地址:")
-                        .gridColumnAlignment(.trailing)
-                    TextField("https://api.openai.com/v1", text: $viewModel.translationAPIURL)
-                        .textFieldStyle(.roundedBorder)
-                }
-                GridRow {
-                    Text("API Key:")
-                        .gridColumnAlignment(.trailing)
-                    SecureField("sk-...", text: $viewModel.translationAPIKey)
-                        .textFieldStyle(.roundedBorder)
-                }
-                GridRow {
-                    Text("模型:")
-                        .gridColumnAlignment(.trailing)
-                    TextField("gpt-4o-mini", text: $viewModel.translationModel)
-                        .textFieldStyle(.roundedBorder)
-                }
+                settingField("API 地址", placeholder: "https://api.openai.com/v1", text: $viewModel.translationAPIURL)
+                settingField("API Key", placeholder: "sk-...", text: $viewModel.translationAPIKey, secure: true)
+                settingField("模型", placeholder: "gpt-4o-mini", text: $viewModel.translationModel)
+
+                Text("示例：DeepSeek → https://api.deepseek.com/v1，模型 deepseek-chat\nGemini → https://generativelanguage.googleapis.com/v1beta，模型 gemini-2.0-flash")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-
-            Text("示例：DeepSeek → https://api.deepseek.com/v1，模型 deepseek-chat\nGemini → https://generativelanguage.googleapis.com/v1beta，模型 gemini-2.0-flash")
-                .font(.caption)
-                .foregroundColor(.secondary)
 
             Spacer()
         }
         .padding(20)
+    }
+
+    private func settingCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14, content: content)
+            .padding(15)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .panelSectionSurface(cornerRadius: 15, fillOpacity: 0.30)
+    }
+
+    private func settingStepper<Control: View>(title: String, value: String, @ViewBuilder control: () -> Control) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value)
+                .font(.callout.monospacedDigit())
+                .foregroundStyle(.secondary)
+            control()
+        }
+    }
+
+    private func settingField(_ title: String, placeholder: String, text: Binding<String>, secure: Bool = false) -> some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .frame(width: 64, alignment: .trailing)
+                .foregroundStyle(.secondary)
+            Group {
+                if secure {
+                    SecureField(placeholder, text: text)
+                } else {
+                    TextField(placeholder, text: text)
+                }
+            }
+            .textFieldStyle(.roundedBorder)
+        }
     }
 }
 
@@ -220,6 +229,7 @@ struct ShortcutRecorderView: View {
                             ? Color.red.opacity(0.5)
                             : Color.secondary.opacity(0.3), lineWidth: 1)
             )
+            .adaptiveGlassSurface(cornerRadius: 8, prominent: shortcutManager.isRecording, interactive: true)
         }
         .buttonStyle(.plain)
     }

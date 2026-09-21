@@ -1,20 +1,48 @@
 import SwiftUI
 
 extension View {
+    /// A soft system-tinted backdrop that gives translucent surfaces something
+    /// interesting to refract while remaining legible in both appearances.
+    func glassBackdrop() -> some View {
+        background {
+            ZStack {
+                Color(nsColor: .windowBackgroundColor)
+
+                LinearGradient(
+                    colors: [
+                        Color.accentColor.opacity(0.14),
+                        Color.clear,
+                        Color(nsColor: .systemPurple).opacity(0.08)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                RadialGradient(
+                    colors: [Color.white.opacity(0.12), .clear],
+                    center: .topLeading,
+                    startRadius: 10,
+                    endRadius: 280
+                )
+            }
+        }
+    }
+
     func panelSectionSurface(
         cornerRadius: CGFloat = 14,
         tint: Color = Color(nsColor: .controlBackgroundColor),
-        fillOpacity: Double = 0.56
+        fillOpacity: Double = 0.48
     ) -> some View {
-        background(
+        background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .background(
             tint.opacity(fillOpacity),
             in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.11), lineWidth: 0.75)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.75)
         }
-        .shadow(color: .black.opacity(0.035), radius: 3, y: 1)
+        .shadow(color: .black.opacity(0.10), radius: 16, y: 6)
     }
 
     @ViewBuilder
@@ -46,7 +74,7 @@ extension View {
             )
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(.white.opacity(0.16), lineWidth: 0.75)
+                    .strokeBorder(.white.opacity(0.20), lineWidth: 0.75)
             }
         }
     }
@@ -63,7 +91,7 @@ extension View {
             background(.thinMaterial, in: Circle())
                 .overlay {
                     Circle()
-                        .strokeBorder(.white.opacity(0.16), lineWidth: 0.75)
+                        .strokeBorder(.white.opacity(0.20), lineWidth: 0.75)
                 }
         }
     }
