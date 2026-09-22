@@ -25,9 +25,9 @@ struct MenuBarView: View {
         HStack(spacing: 8) {
             SearchBarView(searchText: $clipboardListViewModel.searchText)
 
-            GlassIconButton(systemImage: "gearshape", helpText: "设置", usesGlass: false, action: openSettingsWindow)
+            GlassIconButton(systemImage: "gearshape", helpText: "设置", action: openSettingsWindow)
 
-            GlassIconButton(systemImage: "power", helpText: "退出", usesGlass: false) {
+            GlassIconButton(systemImage: "power", helpText: "退出") {
                 NSApplication.shared.terminate(nil)
             }
         }

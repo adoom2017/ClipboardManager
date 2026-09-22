@@ -89,11 +89,13 @@ struct ClipboardRowView: View {
                     .fill(
                         isKeyboardSelected
                             ? Color.accentColor.opacity(0.16)
-                            : isHovered ? Color.white.opacity(0.10) : .clear
+                            : isHovered ? Color.accentColor.opacity(0.08) : .clear
                     )
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(
-                        isKeyboardSelected ? Color.accentColor.opacity(0.72) : .clear,
+                        isKeyboardSelected
+                            ? Color.accentColor.opacity(0.72)
+                            : isHovered ? Color.accentColor.opacity(0.34) : .clear,
                         lineWidth: 1
                     )
             }

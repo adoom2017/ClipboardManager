@@ -12,7 +12,11 @@ struct ClipboardListView: View {
     @FocusState private var isListFocused: Bool
 
     private var selectedItemID: UUID? {
-        selection.selectedID(in: viewModel.filteredItems)
+        guard let selectedID = selection.selectedItemID,
+              viewModel.filteredItems.contains(where: { $0.id == selectedID }) else {
+            return nil
+        }
+        return selectedID
     }
 
     var body: some View {
@@ -106,7 +110,10 @@ struct ClipboardListView: View {
             shortcutIndex: nil,
             isHovered: hoveredItemId == item.id,
             isKeyboardSelected: selectedItemID == item.id,
-            onActivate: { viewModel.pasteItem(item) },
+            onActivate: {
+                selection.select(item.id)
+                viewModel.pasteItem(item)
+            },
             onActionHoverChanged: { hovering in
                 handleActionHover(hovering, item: item)
             },

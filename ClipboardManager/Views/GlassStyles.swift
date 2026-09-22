@@ -40,9 +40,37 @@ extension View {
         )
         .overlay {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.75)
+                .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.8)
         }
-        .shadow(color: .black.opacity(0.10), radius: 16, y: 6)
+        .overlay {
+            RoundedRectangle(cornerRadius: max(cornerRadius - 0.5, 0), style: .continuous)
+                .strokeBorder(Color.white.opacity(0.24), lineWidth: 0.55)
+        }
+        .shadow(color: .black.opacity(0.15), radius: 18, y: 7)
+    }
+
+    private func glassSurfaceChrome(cornerRadius: CGFloat) -> some View {
+        overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.8)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: max(cornerRadius - 0.5, 0), style: .continuous)
+                .strokeBorder(Color.white.opacity(0.24), lineWidth: 0.55)
+        }
+        .shadow(color: .black.opacity(0.15), radius: 18, y: 7)
+    }
+
+    private func glassIconChrome() -> some View {
+        overlay {
+            Circle()
+                .strokeBorder(Color.primary.opacity(0.16), lineWidth: 0.8)
+        }
+        .overlay {
+            Circle()
+                .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.55)
+        }
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
     }
 
     @ViewBuilder
@@ -57,25 +85,26 @@ extension View {
                     .regular.tint(Color.accentColor.opacity(0.12)).interactive(),
                     in: .rect(cornerRadius: cornerRadius)
                 )
+                .glassSurfaceChrome(cornerRadius: cornerRadius)
             } else if prominent {
                 glassEffect(
                     .regular.tint(Color.accentColor.opacity(0.12)),
                     in: .rect(cornerRadius: cornerRadius)
                 )
+                .glassSurfaceChrome(cornerRadius: cornerRadius)
             } else if interactive {
                 glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+                    .glassSurfaceChrome(cornerRadius: cornerRadius)
             } else {
                 glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                    .glassSurfaceChrome(cornerRadius: cornerRadius)
             }
         } else {
             background(
                 .regularMaterial,
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(.white.opacity(0.20), lineWidth: 0.75)
-            }
+            .glassSurfaceChrome(cornerRadius: cornerRadius)
         }
     }
 
@@ -84,15 +113,18 @@ extension View {
         if #available(macOS 26.0, *) {
             if let tint {
                 glassEffect(.regular.tint(tint).interactive(), in: .circle)
+                    .glassIconChrome()
             } else {
                 glassEffect(.regular.interactive(), in: .circle)
+                    .glassIconChrome()
             }
         } else {
-            background(.thinMaterial, in: Circle())
-                .overlay {
-                    Circle()
-                        .strokeBorder(.white.opacity(0.20), lineWidth: 0.75)
-                }
+            background(.regularMaterial, in: Circle())
+                .background(
+                    Color(nsColor: .controlBackgroundColor).opacity(0.20),
+                    in: Circle()
+                )
+                .glassIconChrome()
         }
     }
 }

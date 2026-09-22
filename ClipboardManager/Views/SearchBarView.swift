@@ -27,6 +27,22 @@ struct SearchBarView: View {
         }
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, minHeight: 38, maxHeight: 38)
-        .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 13))
+        .background(
+            .regularMaterial,
+            in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+        )
+        .background(
+            Color(nsColor: .controlBackgroundColor).opacity(0.28),
+            in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.16), lineWidth: 0.8)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 12.5, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.6)
+        }
+        .shadow(color: .black.opacity(0.14), radius: 12, y: 5)
     }
 }
