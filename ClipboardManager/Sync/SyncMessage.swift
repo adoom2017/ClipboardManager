@@ -8,6 +8,25 @@ enum SyncMessageType: String, Codable {
     case ack              // 收到确认
     case ping             // 心跳
     case pong             // 心跳回应
+    case error            // 接收端拒绝 items，携带 errorCode
+}
+
+/// `error` 消息的原因码。未知原因码按通用失败处理。
+enum SyncErrorCode: String, Codable {
+    case pinNotConfigured
+    case decryptFailed
+    case invalidPayload
+
+    func userMessage(peerName: String) -> String {
+        switch self {
+        case .pinNotConfigured:
+            return "\(peerName) 尚未配置同步 PIN。"
+        case .decryptFailed:
+            return "\(peerName) 无法解密，请确认两端同步 PIN 一致。"
+        case .invalidPayload:
+            return "\(peerName) 无法解析同步内容，请确认两端均为最新版本。"
+        }
+    }
 }
 
 // MARK: - 消息体
@@ -20,6 +39,8 @@ struct SyncMessage: Codable {
     var senderName: String
     /// AES-GCM: nonce + ciphertext + tag
     var encryptedPayload: Data?
+    /// 仅 `error` 消息使用，取值见 `SyncErrorCode`
+    var errorCode: String?
 
     // MARK: 帧编解码（4 字节大端长度头 + JSON body）
 

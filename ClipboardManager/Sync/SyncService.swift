@@ -99,6 +99,17 @@ class SyncService: ObservableObject {
         }
         connection.onMessage = { [weak self, weak connection] message in
             guard let connection else { return }
+            if message.type == .error {
+                guard !didComplete else { return }
+                didComplete = true
+                timeout.cancel()
+                self?.log(.warn, "sync rejected errorCode=\(message.errorCode ?? "") peer=\(peer.displayName) peerID=\(peer.peerID)")
+                self?.syncErrorMessage = message.errorCode.flatMap(SyncErrorCode.init(rawValue:))?
+                    .userMessage(peerName: peer.displayName)
+                    ?? "\(peer.displayName) 拒绝了同步内容。"
+                connection.cancel()
+                return
+            }
             if message.type == .ack {
                 guard !didComplete else { return }
                 didComplete = true
@@ -140,34 +151,89 @@ class SyncService: ObservableObject {
         case .hello:
             break
         case .items:
-            guard let encryptedPayload = message.encryptedPayload,
-                  let pin = SecureCredentialStore.shared.value(for: "syncPIN"), pin.count == 6 else {
+            guard let encryptedPayload = message.encryptedPayload else {
                 log(.warn, "reject unencrypted items payload from senderID=\(message.senderID)")
-                connection.cancel()
+                reject(.invalidPayload, on: connection)
+                return
+            }
+            guard let pin = SecureCredentialStore.shared.value(for: "syncPIN"), pin.count == 6 else {
+                log(.warn, "reject items because sync PIN is not configured senderID=\(message.senderID)")
+                reject(.pinNotConfigured, on: connection)
                 return
             }
             let key = SyncCrypto.deriveKey(pin: pin, localID: localID, remoteID: message.senderID)
-            guard let payloadData = try? SyncCrypto.decrypt(encryptedPayload, using: key),
-                  let payload = try? JSONDecoder().decode(SyncItemsPayload.self, from: payloadData) else {
+            guard let payloadData = try? SyncCrypto.decrypt(encryptedPayload, using: key) else {
                 log(.warn, "failed to decrypt items payload from senderID=\(message.senderID)")
-                connection.cancel()
+                reject(.decryptFailed, on: connection)
                 return
             }
-            log(.info, "decoded \(payload.items.count) synced item(s) from senderID=\(message.senderID)")
-            receiveItems(payload.items)
-            let ack = SyncMessage(type: .ack, senderID: localID, senderName: localName)
-            connection.send(message: ack)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                connection.cancel()
+            guard let payload = try? JSONDecoder().decode(SyncItemsPayload.self, from: payloadData),
+                  let received = Self.receivedItems(
+                      from: payload.items,
+                      existingIDs: Set(ClipboardStore.shared.fetchAllItems().map(\.id))
+                  ) else {
+                log(.warn, "invalid items payload from senderID=\(message.senderID)")
+                reject(.invalidPayload, on: connection)
+                return
             }
+            log(.info, "decoded \(payload.items.count) synced item(s), storing \(received.count) from senderID=\(message.senderID)")
+            // 末尾的条目先插入，使 payload 中的第一条最终位于列表顶部。
+            for item in received.reversed() {
+                ClipboardStore.shared.addItem(item)
+            }
+            // 写入完成后再确认，ACK 表示条目已落库（或因重复已存在）。
+            reply(SyncMessage(type: .ack, senderID: localID, senderName: localName), andCloseOn: connection)
         case .ack:
             break
         case .ping:
             let pong = SyncMessage(type: .pong, senderID: localID, senderName: localName)
             connection.send(message: pong)
-        case .pong:
+        case .pong, .error:
             break
         }
+    }
+
+    private func reject(_ code: SyncErrorCode, on connection: SyncConnection) {
+        var message = SyncMessage(type: .error, senderID: localID, senderName: localName)
+        message.errorCode = code.rawValue
+        reply(message, andCloseOn: connection)
+    }
+
+    private func reply(_ message: SyncMessage, andCloseOn connection: SyncConnection) {
+        connection.send(message: message)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            connection.cancel()
+        }
+    }
+
+    static let syncedSourcePrefix = "📡 "
+
+    /// 把对端条目转换为本地条目：按 UUID 去重、忽略对端置顶状态、
+    /// 时间戳使用接收时间。任一条目 ID 不是 UUID 时整批拒绝（返回 nil）。
+    static func receivedItems(
+        from syncItems: [SyncClipboardItem],
+        existingIDs: Set<UUID>,
+        now: Date = Date()
+    ) -> [ClipboardItem]? {
+        var seen = existingIDs
+        var result: [ClipboardItem] = []
+        for (index, syncItem) in syncItems.enumerated() {
+            guard let uuid = UUID(uuidString: syncItem.id) else { return nil }
+            guard seen.insert(uuid).inserted else { continue }
+            let sourceApp = syncItem.sourceApp.hasPrefix(syncedSourcePrefix)
+                ? syncItem.sourceApp
+                : syncedSourcePrefix + syncItem.sourceApp
+            result.append(ClipboardItem(
+                id: uuid,
+                contentType: .text,
+                content: syncItem.content,
+                // 逐条递减 1ms，保证批内顺序在按时间排序的一端也稳定。
+                timestamp: now.addingTimeInterval(-Double(index) / 1000),
+                sourceApp: sourceApp,
+                isPinned: false
+            ))
+        }
+        return result
     }
 
     func boostDiscovery() {
@@ -202,32 +268,6 @@ class SyncService: ObservableObject {
         }
         connection.send(message: message)
         return nil
-    }
-
-    private func receiveItems(_ items: [SyncClipboardItem]) {
-        DispatchQueue.main.async {
-            let store = ClipboardStore.shared
-            for syncItem in items {
-                guard let uuid = UUID(uuidString: syncItem.id) else {
-                    self.log(.warn, "skip synced item because id is not UUID id=\(syncItem.id)")
-                    continue
-                }
-                if store.fetchAllItems().contains(where: { $0.id == uuid }) {
-                    self.log(.debug, "skip synced item because id already exists id=\(syncItem.id)")
-                    continue
-                }
-                let item = ClipboardItem(
-                    id: uuid,
-                    contentType: .text,
-                    content: syncItem.content,
-                    timestamp: syncItem.timestamp,
-                    sourceApp: "📡 \(syncItem.sourceApp)",
-                    isPinned: false
-                )
-                self.log(.debug, "store synced item id=\(syncItem.id) sourceApp=\(syncItem.sourceApp)")
-                store.addItem(item)
-            }
-        }
     }
 
     private func log(_ level: AppLogLevel = .debug, _ message: String) {

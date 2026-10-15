@@ -58,3 +58,12 @@ ClipboardManager 是一个基于 SwiftUI 和 AppKit 的 macOS 菜单栏剪贴板
 ```
 
 产物默认位于 `build/Release/`。DMG 脚本需要可用的 Developer ID Application 证书；如证书不唯一，可通过 `SIGNING_IDENTITY` 和 `DEVELOPMENT_TEAM` 指定签名身份。设置 `NOTARY_PROFILE` 后，脚本还会执行公证和 stapling。
+
+## 文档
+
+跨端共享文档（同时适用于 Windows 版 ClipboardManager-Flutter）：
+
+- [用户指南](docs/user-guide.md)：安装、权限、常用操作和同步设置。
+- [系统架构](docs/architecture.md)：模块、数据流、持久化和安全边界。
+- [开发指南](docs/development.md)：构建、测试、目录约定和验证清单。
+- [同步协议](docs/sync-protocol.md)：发现、帧格式、密钥派生、兼容性和排障。
