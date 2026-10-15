@@ -13,9 +13,11 @@ struct ClipboardRowView: View {
     @ObservedObject private var syncService = SyncService.shared
 
     private static let cornerRadius: CGFloat = 8
+    private static let actionSize: CGFloat = 24
+    private static let fadeWidth: CGFloat = 20
 
     var body: some View {
-        HStack(spacing: 8) {
+        ZStack(alignment: .trailing) {
             Button(action: { onActivate?() }) {
                 HStack(spacing: 10) {
                     leadingView
@@ -36,6 +38,7 @@ struct ClipboardRowView: View {
                     Spacer(minLength: 0)
                 }
                 .contentShape(.rect)
+                .mask { textMask }
             }
             .buttonStyle(.plain)
 
@@ -71,11 +74,45 @@ struct ClipboardRowView: View {
         return "\(source) · \(clipboardItem.relativeTimeString)"
     }
 
+    /// 文字铺满整行；右侧附件出现时，文字在附件下方渐隐，而不是重新换行。
+    private var trailingInset: CGFloat {
+        if isHovered {
+            return CGFloat(actionCount) * Self.actionSize
+        }
+        return clipboardItem.isPinned ? 16 : 0
+    }
+
+    private var actionCount: Int {
+        var count = 2 // 置顶、删除
+        if clipboardItem.contentType == .text {
+            count += 1 // 翻译
+            if !syncService.discoveredPeers.isEmpty {
+                count += 1 // 同步
+            }
+        }
+        return count
+    }
+
+    @ViewBuilder
+    private var textMask: some View {
+        if trailingInset > 0 {
+            HStack(spacing: 0) {
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: Self.fadeWidth)
+                Color.clear
+                    .frame(width: trailingInset)
+            }
+        } else {
+            Color.black
+        }
+    }
+
     private var accessoryColor: Color {
         isSelected ? .white.opacity(0.85) : .secondary
     }
 
-    /// 操作按钮常驻布局、仅切换透明度，悬停时文字不会重新换行。
+    /// 悬停操作浮在行的右侧，不占用文字的布局宽度。
     private var trailingAccessories: some View {
         ZStack(alignment: .trailing) {
             if clipboardItem.isPinned {
@@ -83,7 +120,7 @@ struct ClipboardRowView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(isSelected ? AnyShapeStyle(.white.opacity(0.85)) : AnyShapeStyle(.tertiary))
                     .rotationEffect(.degrees(45))
-                    .padding(.trailing, 6)
+                    .frame(width: 16)
                     .opacity(isHovered ? 0 : 1)
                     .accessibilityLabel("已置顶")
             }
@@ -125,7 +162,7 @@ struct ClipboardRowView: View {
             Image(systemName: systemImage)
                 .font(.system(size: 12))
                 .foregroundStyle(accessoryColor)
-                .frame(width: 24, height: 24)
+                .frame(width: Self.actionSize, height: Self.actionSize)
                 .contentShape(.rect)
         }
         .buttonStyle(.borderless)
@@ -151,7 +188,7 @@ struct ClipboardRowView: View {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.system(size: 12))
                     .foregroundStyle(accessoryColor)
-                    .frame(width: 24, height: 24)
+                    .frame(width: Self.actionSize, height: Self.actionSize)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
