@@ -144,6 +144,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-release.ps1 `
 
 传入证书指纹时，脚本使用 `signtool.exe` 对包内 EXE/DLL 签名、添加 SHA-256 时间戳并逐个验证。未传指纹时会生成未签名 ZIP 并输出警告。
 
+脚本会把 `msvcp140.dll`、`vcruntime140.dll`、`vcruntime140_1.dll` 复制进包内，目标机器无需另装 Visual C++ 运行库。
+
+加 `-CreateInstaller` 时，脚本用 Inno Setup 6（`ISCC.exe`）按 `windows/installer/ClipboardManager.iss` 生成按用户安装的安装程序 `ClipboardManager-Windows-<version>-Setup.exe` 及其 `.sha256`；传入证书指纹时安装程序同样签名。安装程序的 `AppId` 用于升级识别，不得修改。
+
 可选参数：
 
 | 参数 | 默认值 | 用途 |
@@ -154,6 +158,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-release.ps1 `
 | `-CertificateThumbprint` | 空 | 当前证书存储中的 SHA-1 指纹 |
 | `-TimestampUrl` | DigiCert 时间戳服务 | RFC 3161 时间戳地址 |
 | `-SkipTests` | false | 跳过 `flutter test`；静态分析仍执行 |
+| `-CreateInstaller` | false | 额外生成 Inno Setup 安装程序 |
+
+### Windows CI 与发布
+
+`ClipboardManager-Flutter/.github/workflows/windows.yml`：
+
+- 推送 `master`、Pull Request、手动触发：分析、测试、编译、生成 ZIP 和安装程序，作为 Actions 产物保留 14 天。
+- 推送 `vX.Y.Z` 标签：版本号取自标签，构建号取 `github.run_number`，构建完成后创建 GitHub Release 并上传全部产物。不符合 `vX.Y.Z` 的标签会让构建失败。
+- CI 不做代码签名。
 
 ### 校验产物
 
