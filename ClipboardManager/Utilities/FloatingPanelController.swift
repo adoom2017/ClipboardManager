@@ -27,14 +27,19 @@ class FloatingPanelController: NSPanel {
         self.animationBehavior = .utilityWindow
         self.backgroundColor = .clear
         self.isOpaque = false
-        // 窗口阴影跟随圆角背景的透明度轮廓。
-        self.hasShadow = true
         // 允许面板在非活跃应用时也接收鼠标事件
         self.hidesOnDeactivate = false
 
         let hostingView = NSHostingView(rootView: MenuBarView(clipboardListViewModel: viewModel))
         hostingView.sizingOptions = []
         self.contentView = Self.makeBackgroundView(containing: hostingView)
+        // Liquid Glass 自带圆角阴影；再开启窗口阴影会在玻璃外侧多出一圈直角框。
+        // 旧系统的毛玻璃背景通过 maskImage 让窗口阴影跟随圆角。
+        if #available(macOS 26.0, *) {
+            self.hasShadow = false
+        } else {
+            self.hasShadow = true
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -103,7 +108,9 @@ class FloatingPanelController: NSPanel {
         // NSPanel 的 .nonactivatingPanel 保证不会激活（切换）当前前台应用
         orderFrontRegardless()
         makeKey()
-        invalidateShadow()
+        if hasShadow {
+            invalidateShadow()
+        }
         NotificationCenter.default.post(name: .clipboardPanelDidShow, object: nil)
     }
 
