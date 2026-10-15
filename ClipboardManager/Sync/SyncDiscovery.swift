@@ -21,6 +21,10 @@ class SyncDiscovery: ObservableObject {
     private var currentBroadcastPort: UInt16?
     private var lastPublishedPeerNames = Set<String>()
 
+    /// 所有发现状态（listener、browser、广播、过期清理）都在这个串行队列上读写，
+    /// 避免多个回调并发修改 peer 字典。
+    private let queue = DispatchQueue(label: "com.clipboard.SyncDiscovery", qos: .utility)
+
     /// 本机 Bonjour 服务名（= localID），用于过滤自身
     private let localServiceName: String
     private let localDisplayName: String
@@ -36,14 +40,20 @@ class SyncDiscovery: ObservableObject {
     // MARK: - 启动
 
     func start(port: NWEndpoint.Port = .any) {
-        guard !isRunning else { return }
-        isRunning = true
-        log(.info, "start localServiceName=\(localServiceName)")
-        startListener(port: port)
-        startBrowser()
+        queue.async {
+            guard !self.isRunning else { return }
+            self.isRunning = true
+            self.log(.info, "start localServiceName=\(self.localServiceName)")
+            self.startListener(port: port)
+            self.startBrowser()
+        }
     }
 
     func stop() {
+        queue.sync(execute: stopOnQueue)
+    }
+
+    private func stopOnQueue() {
         isRunning = false
         restartWorkItem?.cancel()
         restartWorkItem = nil
@@ -103,7 +113,7 @@ class SyncDiscovery: ObservableObject {
                 break
             }
         }
-        listener.start(queue: .global(qos: .utility))
+        listener.start(queue: queue)
         self.listener = listener
     }
 
@@ -147,7 +157,7 @@ class SyncDiscovery: ObservableObject {
                 break
             }
         }
-        browser.start(queue: .global(qos: .utility))
+        browser.start(queue: queue)
         self.browser = browser
     }
 
@@ -189,7 +199,8 @@ class SyncDiscovery: ObservableObject {
         let discovery = SyncBroadcastDiscovery(
             localID: localServiceName,
             localName: localDisplayName,
-            serverPort: Int(portValue)
+            serverPort: Int(portValue),
+            queue: queue
         )
         discovery.onPeerDiscovered = { [weak self] peer in
             guard let self else { return }
@@ -211,7 +222,9 @@ class SyncDiscovery: ObservableObject {
     }
 
     func boostActivity() {
-        broadcastDiscovery?.boostBurst()
+        queue.async {
+            self.broadcastDiscovery?.boostBurst()
+        }
     }
 
     private func publishMergedPeers() {
@@ -251,7 +264,7 @@ class SyncDiscovery: ObservableObject {
 
     private func startBroadcastCleanupTimer() {
         broadcastCleanupTimer?.cancel()
-        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + 5.0, repeating: 5.0)
         timer.setEventHandler { [weak self] in
             self?.pruneExpiredBroadcastPeers()
@@ -288,7 +301,7 @@ class SyncDiscovery: ObservableObject {
             self.startBrowser()
         }
         restartWorkItem = workItem
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1.0, execute: workItem)
+        queue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
     }
 
     private func log(_ level: AppLogLevel = .debug, _ message: String) {
@@ -321,6 +334,7 @@ private final class SyncBroadcastDiscovery {
     private let localID: String
     private let localName: String
     private let serverPort: Int
+    private let queue: DispatchQueue
     private let advertisedHost: String?
     private var socketFD: Int32 = -1
     private var readSource: DispatchSourceRead?
@@ -331,10 +345,11 @@ private final class SyncBroadcastDiscovery {
     private var cadenceStart: Date?
     private var didLogSteadyCadence = false
 
-    init(localID: String, localName: String, serverPort: Int) {
+    init(localID: String, localName: String, serverPort: Int, queue: DispatchQueue) {
         self.localID = localID
         self.localName = localName
         self.serverPort = serverPort
+        self.queue = queue
         self.advertisedHost = Self.selectPreferredLocalIPv4()
     }
 
@@ -375,7 +390,6 @@ private final class SyncBroadcastDiscovery {
             log(.warn, "selectedIPv4 unavailable; receiver will use packet source IP")
         }
 
-        let queue = DispatchQueue.global(qos: .utility)
         let source = DispatchSource.makeReadSource(fileDescriptor: socketFD, queue: queue)
         source.setEventHandler { [weak self] in
             self?.receivePacket()
@@ -392,7 +406,7 @@ private final class SyncBroadcastDiscovery {
         didLogSteadyCadence = false
         log(.info, "broadcast cadence started burstInterval=\(Int(burstInterval))s steadyInterval=\(Int(steadyInterval))s")
         sendAnnouncement()
-        scheduleNextAnnouncement(after: nextAnnouncementInterval(), on: queue)
+        scheduleNextAnnouncement(after: nextAnnouncementInterval())
     }
 
     func stop() {
@@ -412,7 +426,7 @@ private final class SyncBroadcastDiscovery {
         didLogSteadyCadence = false
         log(.info, "broadcast cadence boosted to burst mode")
         sendAnnouncement()
-        scheduleNextAnnouncement(after: nextAnnouncementInterval(), on: .global(qos: .utility))
+        scheduleNextAnnouncement(after: nextAnnouncementInterval())
     }
 
     private func sendAnnouncement() {
@@ -466,9 +480,9 @@ private final class SyncBroadcastDiscovery {
               let port = object["port"] as? Int,
               id != localID else { return }
 
-        let senderIP = String(cString: inet_ntoa(sender.sin_addr))
-        let host = (object["host"] as? String).flatMap { Self.isPrivateIPv4($0) ? $0 : nil } ?? senderIP
-        log(.debug, "broadcast packet received id=\(id) host=\(host) sender=\(senderIP) port=\(port)")
+        // 以数据包实际来源地址为准：对端自报的 host 可能是 VPN 或虚拟网卡地址。
+        let host = String(cString: inet_ntoa(sender.sin_addr))
+        log(.debug, "broadcast packet received id=\(id) host=\(host) advertisedHost=\(object["host"] as? String ?? "") port=\(port)")
         let displayName = (object["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? host
         let peer = DiscoveredPeer(peerID: id, displayName: displayName, endpoint: nil, host: host, port: port)
         onPeerDiscovered?(peer)
@@ -487,26 +501,31 @@ private final class SyncBroadcastDiscovery {
         return steadyInterval
     }
 
-    private func scheduleNextAnnouncement(after interval: TimeInterval, on queue: DispatchQueue) {
+    private func scheduleNextAnnouncement(after interval: TimeInterval) {
         announceTimer?.cancel()
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + interval)
         timer.setEventHandler { [weak self] in
             guard let self else { return }
             self.sendAnnouncement()
-            self.scheduleNextAnnouncement(after: self.nextAnnouncementInterval(), on: queue)
+            self.scheduleNextAnnouncement(after: self.nextAnnouncementInterval())
         }
         timer.resume()
         announceTimer = timer
     }
 
+    /// 广播中携带的 host 仅供旧版本接收端参考；新版本接收端使用数据包来源地址。
+    /// 优先物理网卡（en*），避开虚拟机网桥、VPN 等虚拟接口。
     private static func selectPreferredLocalIPv4() -> String? {
         let candidates = localIPv4Candidates()
-        if let preferred = candidates.first(where: { candidate in
-            let lowercased = candidate.interface.lowercased()
-            return lowercased.contains("en0") || lowercased.contains("en1") || lowercased.contains("bridge")
+        if let physical = candidates.first(where: { $0.interface.hasPrefix("en") }) {
+            return physical.address
+        }
+        let virtualPrefixes = ["bridge", "utun", "vmnet", "vnic", "awdl", "llw", "ipsec", "ppp"]
+        if let other = candidates.first(where: { candidate in
+            !virtualPrefixes.contains { candidate.interface.hasPrefix($0) }
         }) {
-            return preferred.address
+            return other.address
         }
         return candidates.first?.address
     }

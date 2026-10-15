@@ -16,6 +16,7 @@
 		28E58A9E1A9629F706E88481 /* LaunchAtLoginManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BF410ECB9078E5CC93AA881 /* LaunchAtLoginManager.swift */; };
 		2C7785AB81FCCA73F6393DE3 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CBAAD7AFED846FB97DFFAB /* AppDelegate.swift */; };
 		2D1F991D2379ECB70F63A3BC /* ClipboardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D1C90E679858C8E2291F924 /* ClipboardStore.swift */; };
+		2F37F0AEE490B226E48595F3 /* SyncMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06342FFF46B410AA51376163 /* SyncMessageTests.swift */; };
 		2F42F7AF2E75E73BCC4F4114 /* ClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCB2ABF51DA4B722473703BC /* ClipboardMonitor.swift */; };
 		3061051F2301378312C61CE2 /* PrivacyGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EB7C018DC823AD535B98581 /* PrivacyGuardTests.swift */; };
 		3C858036898EE9DA81CA8FED /* TranslationWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C477F1291A1BA1A816FB1E65 /* TranslationWindowView.swift */; };
@@ -62,6 +63,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		06342FFF46B410AA51376163 /* SyncMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMessageTests.swift; sourceTree = "<group>"; };
 		0AB897DC5CB2A745847CDE5F /* SyncMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMessage.swift; sourceTree = "<group>"; };
 		14D474E701D96DF77A8A510D /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		1C7AC612511DA8F3302549E4 /* ClipboardSelectionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSelectionController.swift; sourceTree = "<group>"; };
@@ -234,6 +236,7 @@
 				6695270D1A1CCBC70D19A3FD /* ClipboardStoreTests.swift */,
 				1EB7C018DC823AD535B98581 /* PrivacyGuardTests.swift */,
 				47D2F4592EA2DE1BF03AF305 /* SyncCryptoTests.swift */,
+				06342FFF46B410AA51376163 /* SyncMessageTests.swift */,
 				B0DFFB6921D655CB471E4117 /* TranslationServiceTests.swift */,
 			);
 			path = ClipboardManagerTests;
@@ -358,6 +361,7 @@
 				F49F584150BAEA63F91195EE /* ClipboardStoreTests.swift in Sources */,
 				3061051F2301378312C61CE2 /* PrivacyGuardTests.swift in Sources */,
 				4F2D446DD893C4E2FC1D6400 /* SyncCryptoTests.swift in Sources */,
+				2F37F0AEE490B226E48595F3 /* SyncMessageTests.swift in Sources */,
 				5595429895CC8425DC87C983 /* TranslationServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -23,8 +23,14 @@ struct SyncMessage: Codable {
 
     // MARK: 帧编解码（4 字节大端长度头 + JSON body）
 
+    /// 单帧 body 长度上限（不含），两端收发都按此限制。
+    static let maxBodyLength = 10_000_000
+
     func toFrameData() throws -> Data {
         let body = try JSONEncoder().encode(self)
+        guard body.count < Self.maxBodyLength else {
+            throw SyncMessageError.frameTooLarge
+        }
         var length = UInt32(body.count).bigEndian
         var frame = Data(bytes: &length, count: 4)
         frame.append(body)
@@ -34,6 +40,11 @@ struct SyncMessage: Codable {
     static func from(body: Data) throws -> SyncMessage {
         return try JSONDecoder().decode(SyncMessage.self, from: body)
     }
+}
+
+enum SyncMessageError: LocalizedError {
+    case frameTooLarge
+    var errorDescription: String? { "同步内容过大" }
 }
 
 // MARK: - items payload（加密前的明文结构）

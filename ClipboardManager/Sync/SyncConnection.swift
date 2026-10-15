@@ -59,7 +59,14 @@ class SyncConnection {
 
     func send(message: SyncMessage) {
         log(.debug, "send type=\(message.type.rawValue) senderID=\(message.senderID) peerName=\(peerName)")
-        guard let frame = try? message.toFrameData() else { return }
+        let frame: Data
+        do {
+            frame = try message.toFrameData()
+        } catch {
+            log(.warn, "encode frame failed type=\(message.type.rawValue) error=\(error)")
+            cancel()
+            return
+        }
         connection.send(content: frame, completion: .contentProcessed { error in
             if let error = error {
                 self.log(.warn, "send failed error=\(error)")
@@ -73,7 +80,11 @@ class SyncConnection {
         // 先读 4 字节长度头
         connection.receive(minimumIncompleteLength: 4, maximumLength: 4) { [weak self] data, _, isComplete, error in
             guard let self else { return }
-            if let error = error { self.log(.warn, "receive header failed error=\(error)"); return }
+            if let error = error {
+                self.log(.warn, "receive header failed error=\(error)")
+                self.cancel()
+                return
+            }
             guard let data, data.count == 4 else {
                 if isComplete { DispatchQueue.main.async { self.onDisconnect?(self) } }
                 return
@@ -84,10 +95,19 @@ class SyncConnection {
     }
 
     private func receiveBody(length: Int) {
-        guard length > 0, length < 10_000_000 else { receiveNextFrame(); return }
+        // 长度非法时无法跳过 body 重新对齐帧边界，只能断开连接。
+        guard length > 0, length < SyncMessage.maxBodyLength else {
+            log(.warn, "reject frame length=\(length) peerName=\(peerName)")
+            cancel()
+            return
+        }
         connection.receive(minimumIncompleteLength: length, maximumLength: length) { [weak self] data, _, isComplete, error in
             guard let self else { return }
-            if let error = error { self.log(.warn, "receive body failed error=\(error)"); return }
+            if let error = error {
+                self.log(.warn, "receive body failed error=\(error)")
+                self.cancel()
+                return
+            }
             if let data, let message = try? SyncMessage.from(body: data) {
                 self.log(.debug, "recv type=\(message.type.rawValue) senderID=\(message.senderID) peerName=\(self.peerName)")
                 DispatchQueue.main.async { self.onMessage?(message) }
