@@ -8,16 +8,6 @@ struct ClipboardListView: View {
     @State private var previewedItem: ClipboardItem?
     @State private var previewTask: Task<Void, Never>?
     @State private var dismissPreviewTask: Task<Void, Never>?
-    @State private var selection = ClipboardSelectionController()
-    @FocusState private var isListFocused: Bool
-
-    private var selectedItemID: UUID? {
-        guard let selectedID = selection.selectedItemID,
-              viewModel.filteredItems.contains(where: { $0.id == selectedID }) else {
-            return nil
-        }
-        return selectedID
-    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -32,43 +22,18 @@ struct ClipboardListView: View {
                                 : "尝试搜索其他关键词"
                         )
                     )
-                    .frame(maxWidth: .infinity, minHeight: 280)
+                    .frame(maxWidth: .infinity, minHeight: 320)
                 } else {
                     rows
                 }
             }
-            .onChange(of: selectedItemID) { _, itemID in
+            .onChange(of: viewModel.selectedItemID) { _, itemID in
                 guard let itemID else { return }
-                withAnimation(.easeOut(duration: 0.12)) {
-                    proxy.scrollTo(itemID, anchor: .center)
-                }
+                // 不指定锚点时只做最小滚动，选中项已可见则保持不动。
+                proxy.scrollTo(itemID)
             }
         }
-        // Keep the native scrollbar available so it can be dragged directly.
-        .scrollIndicators(.visible)
-        .clipped()
-        .focusable(interactions: .edit)
-        .focused($isListFocused)
-        .defaultFocus($isListFocused, true)
-        .focusEffectDisabled()
-        .onKeyPress(.downArrow) {
-            moveSelection(by: 1)
-            return .handled
-        }
-        .onKeyPress(.upArrow) {
-            moveSelection(by: -1)
-            return .handled
-        }
-        .onKeyPress(.return) {
-            pasteSelectedItem()
-            return .handled
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .clipboardPanelDidShow)) { _ in
-            isListFocused = true
-        }
-        .onChange(of: viewModel.searchText) {
-            selection.reset()
-        }
+        .scrollIndicators(.automatic)
         .alert(
             "同步失败",
             isPresented: Binding(
@@ -94,24 +59,45 @@ struct ClipboardListView: View {
     }
 
     private var rows: some View {
-        LazyVStack(spacing: 2) {
-            ForEach(viewModel.filteredItems) { item in
-                row(for: item)
-                    .id(item.id)
+        let items = viewModel.filteredItems
+        let pinned = items.filter(\.isPinned)
+        let recent = items.filter { !$0.isPinned }
+
+        return LazyVStack(alignment: .leading, spacing: 1) {
+            if !pinned.isEmpty {
+                sectionHeader("置顶")
+                ForEach(pinned) { item in
+                    row(for: item).id(item.id)
+                }
+                sectionHeader("最近")
+            }
+            ForEach(recent) { item in
+                row(for: item).id(item.id)
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 2)
+        // 右侧留出滚动条通道：滚动条不压在行上，拖动时也不会误触行内按钮。
+        .padding(.leading, 8)
+        .padding(.trailing, 14)
+        .padding(.vertical, 6)
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+            .padding(.bottom, 2)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func row(for item: ClipboardItem) -> some View {
         ClipboardRowView(
             clipboardItem: item,
-            shortcutIndex: nil,
             isHovered: hoveredItemId == item.id,
-            isKeyboardSelected: selectedItemID == item.id,
+            isSelected: viewModel.selectedItemID == item.id,
             onActivate: {
-                selection.select(item.id)
+                viewModel.select(item)
                 viewModel.pasteItem(item)
             },
             onActionHoverChanged: { hovering in
@@ -120,7 +106,6 @@ struct ClipboardListView: View {
             onPin: { viewModel.togglePin(item) },
             onDelete: { delete(item) }
         )
-        .contentShape(.rect)
         .onHover { hovering in
             handleHover(hovering, item: item)
         }
@@ -151,15 +136,6 @@ struct ClipboardListView: View {
                 delete(item)
             }
         }
-    }
-
-    private func moveSelection(by offset: Int) {
-        selection.move(in: viewModel.filteredItems, by: offset)
-    }
-
-    private func pasteSelectedItem() {
-        guard let item = selection.selectedItem(in: viewModel.filteredItems) else { return }
-        viewModel.pasteItem(item)
     }
 
     private func delete(_ item: ClipboardItem) {
@@ -248,6 +224,6 @@ struct ClipboardListView: View {
 struct ClipboardListView_Previews: PreviewProvider {
     static var previews: some View {
         ClipboardListView(viewModel: ClipboardListViewModel())
-            .frame(width: 360, height: 400)
+            .frame(width: 400, height: 440)
     }
 }

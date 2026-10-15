@@ -61,18 +61,6 @@ extension View {
         .shadow(color: .black.opacity(0.15), radius: 18, y: 7)
     }
 
-    private func glassIconChrome() -> some View {
-        overlay {
-            Circle()
-                .strokeBorder(Color.primary.opacity(0.16), lineWidth: 0.8)
-        }
-        .overlay {
-            Circle()
-                .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.55)
-        }
-        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
-    }
-
     @ViewBuilder
     func adaptiveGlassSurface(
         cornerRadius: CGFloat = 16,
@@ -106,57 +94,5 @@ extension View {
             )
             .glassSurfaceChrome(cornerRadius: cornerRadius)
         }
-    }
-
-    @ViewBuilder
-    func adaptiveGlassIconControl(tint: Color? = nil) -> some View {
-        if #available(macOS 26.0, *) {
-            if let tint {
-                glassEffect(.regular.tint(tint).interactive(), in: .circle)
-                    .glassIconChrome()
-            } else {
-                glassEffect(.regular.interactive(), in: .circle)
-                    .glassIconChrome()
-            }
-        } else {
-            background(.regularMaterial, in: Circle())
-                .background(
-                    Color(nsColor: .controlBackgroundColor).opacity(0.20),
-                    in: Circle()
-                )
-                .glassIconChrome()
-        }
-    }
-}
-
-struct GlassIconButton: View {
-    let systemImage: String
-    let helpText: String
-    var tint: Color? = nil
-    var role: ButtonRole? = nil
-    var usesGlass = true
-    let action: () -> Void
-
-    @ViewBuilder
-    var body: some View {
-        if usesGlass {
-            button
-                .adaptiveGlassIconControl(tint: tint?.opacity(0.18))
-        } else {
-            button
-        }
-    }
-
-    private var button: some View {
-        Button(role: role, action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(tint ?? .secondary)
-                .frame(width: 28, height: 28)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .help(helpText)
-        .accessibilityLabel(helpText)
     }
 }

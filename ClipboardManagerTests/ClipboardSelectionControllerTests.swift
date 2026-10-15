@@ -37,4 +37,18 @@ final class ClipboardSelectionControllerTests: XCTestCase {
         XCTAssertEqual(selection.selectedID(in: [items[2], items[0]]), items[2].id)
         XCTAssertNil(selection.selectedID(in: []))
     }
+
+    func testListViewModelSelectionFollowsFilteredItemsAndResetsOnSearch() {
+        let viewModel = ClipboardListViewModel()
+        viewModel.clipboardItems = items
+
+        XCTAssertEqual(viewModel.selectedItemID, items[0].id)
+        viewModel.moveSelection(by: 2)
+        XCTAssertEqual(viewModel.selectedItemID, items[2].id)
+
+        viewModel.searchText = "second"
+        XCTAssertEqual(viewModel.selectedItemID, items[1].id)
+        viewModel.moveSelection(by: 1)
+        XCTAssertEqual(viewModel.selectedItemID, items[1].id)
+    }
 }
