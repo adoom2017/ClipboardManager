@@ -4,9 +4,14 @@ import AppKit
 class FloatingPanelController: NSPanel {
     static let shared = FloatingPanelController()
 
+    static let panelSize = NSSize(width: 400, height: 520)
+    private static let cornerRadius: CGFloat = 16
+
+    private let viewModel = ClipboardListViewModel()
+
     private init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 380, height: 500),
+            contentRect: NSRect(origin: .zero, size: Self.panelSize),
             styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
             defer: false
@@ -14,39 +19,67 @@ class FloatingPanelController: NSPanel {
 
         self.isFloatingPanel = true
         self.level = .floating
-        self.isMovableByWindowBackground = true
+        // 只允许通过顶部搜索栏和底部状态栏的拖拽区域移动面板。
+        // 背景可拖动会与列表滚动条抢占鼠标拖拽。
+        self.isMovableByWindowBackground = false
         self.isReleasedWhenClosed = false
-        self.collectionBehavior = [.transient, .ignoresCycle]
+        self.collectionBehavior = [.transient, .ignoresCycle, .fullScreenAuxiliary]
         self.animationBehavior = .utilityWindow
         self.backgroundColor = .clear
         self.isOpaque = false
-        // SwiftUI draws the single rounded glass surface edge-to-edge.
-        // Do not add a rectangular window shadow around it.
-        self.hasShadow = false
+        // 窗口阴影跟随圆角背景的透明度轮廓。
+        self.hasShadow = true
         // 允许面板在非活跃应用时也接收鼠标事件
         self.hidesOnDeactivate = false
-        // 不设置 becomesKeyOnlyIfNeeded，确保点击任何区域都能立即响应
 
-        let viewModel = ClipboardListViewModel()
         let hostingView = NSHostingView(rootView: MenuBarView(clipboardListViewModel: viewModel))
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
         hostingView.sizingOptions = []
-
-        // 用普通 NSView 做容器，避免 NSHostingView 直接作为 contentView
-        // 时 AppKit 与 SwiftUI 布局系统互相触发 layoutSubtreeIfNeeded 的递归问题
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 500))
-        container.addSubview(hostingView)
-        NSLayoutConstraint.activate([
-            hostingView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            hostingView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            hostingView.topAnchor.constraint(equalTo: container.topAnchor),
-            hostingView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
-        self.contentView = container
+        self.contentView = Self.makeBackgroundView(containing: hostingView)
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// 系统原生的圆角材质背景：macOS 26 使用 Liquid Glass，更早系统使用弹出层毛玻璃。
+    /// SwiftUI 内容放在其中，不再自绘第二层材质。
+    private static func makeBackgroundView(containing hostingView: NSView) -> NSView {
+        let frame = NSRect(origin: .zero, size: panelSize)
+        hostingView.frame = frame
+        hostingView.autoresizingMask = [.width, .height]
+
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView(frame: frame)
+            glass.cornerRadius = cornerRadius
+            glass.style = .regular
+            glass.contentView = hostingView
+            return glass
+        }
+
+        let effect = NSVisualEffectView(frame: frame)
+        effect.material = .popover
+        effect.blendingMode = .behindWindow
+        effect.state = .active
+        effect.maskImage = roundedMask(cornerRadius: cornerRadius)
+        effect.addSubview(hostingView)
+        return effect
+    }
+
+    private static func roundedMask(cornerRadius: CGFloat) -> NSImage {
+        let edge = cornerRadius * 2 + 1
+        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(
+            top: cornerRadius,
+            left: cornerRadius,
+            bottom: cornerRadius,
+            right: cornerRadius
+        )
+        image.resizingMode = .stretch
+        return image
     }
 
     func togglePanel() {
@@ -58,17 +91,19 @@ class FloatingPanelController: NSPanel {
     }
 
     func showPanel() {
-        // 居中显示
-        if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame
+        // 显示在鼠标所在屏幕的偏上位置，接近 Spotlight 的视觉重心。
+        let mouseLocation = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(mouseLocation) } ?? NSScreen.main
+        if let screenFrame = screen?.visibleFrame {
             let x = screenFrame.midX - frame.width / 2
-            let y = screenFrame.midY - frame.height / 2
-            setFrameOrigin(NSPoint(x: x, y: y))
+            let y = screenFrame.minY + (screenFrame.height - frame.height) * 0.62
+            setFrameOrigin(NSPoint(x: x.rounded(), y: y.rounded()))
         }
         // 显示面板并立即成为 key window，使列表点击第一下即可响应
         // NSPanel 的 .nonactivatingPanel 保证不会激活（切换）当前前台应用
         orderFrontRegardless()
         makeKey()
+        invalidateShadow()
         NotificationCenter.default.post(name: .clipboardPanelDidShow, object: nil)
     }
 
@@ -88,32 +123,40 @@ class FloatingPanelController: NSPanel {
     }
 
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .leftMouseDown {
-            // A borderless panel with movable-by-background enabled otherwise
-            // treats a drag that starts in the SwiftUI list as a panel move.
-            // Let the native scroll view consume those drags instead.
-            isMovableByWindowBackground = !isInsideScrollView(at: event.locationInWindow)
-        } else if event.type == .leftMouseUp {
-            // Keep the setting in sync after AppKit ends a drag.
-            isMovableByWindowBackground = true
+        // 搜索框始终持有焦点，方向键、回车和 Esc 在窗口层统一处理，
+        // 避免被字段编辑器吞掉。输入法组字期间交给输入法处理。
+        if event.type == .keyDown, !isComposingText, handleKeyDown(event) {
+            return
         }
-
         super.sendEvent(event)
     }
 
-    private func isInsideScrollView(at windowPoint: NSPoint) -> Bool {
-        guard let contentView else { return false }
-        let contentPoint = contentView.convert(windowPoint, from: nil)
-        var view = contentView.hitTest(contentPoint)
+    private var isComposingText: Bool {
+        (firstResponder as? NSTextView)?.hasMarkedText() ?? false
+    }
 
-        while let currentView = view {
-            if currentView is NSScrollView {
-                return true
+    private func handleKeyDown(_ event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            .subtracting([.numericPad, .function])
+        guard modifiers.isEmpty else { return false }
+
+        switch Int(event.keyCode) {
+        case 125: // ↓
+            viewModel.moveSelection(by: 1)
+        case 126: // ↑
+            viewModel.moveSelection(by: -1)
+        case 36, 76: // Return / Enter
+            viewModel.pasteSelectedItem()
+        case 53: // Esc
+            if viewModel.searchText.isEmpty {
+                hidePanel()
+            } else {
+                viewModel.searchText = ""
             }
-            view = currentView.superview
+        default:
+            return false
         }
-
-        return false
+        return true
     }
 }
 

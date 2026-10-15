@@ -2,9 +2,8 @@ import SwiftUI
 
 struct ClipboardRowView: View {
     let clipboardItem: ClipboardItem
-    let shortcutIndex: Int?
     var isHovered = false
-    var isKeyboardSelected = false
+    var isSelected = false
     var onActivate: (() -> Void)?
     var onActionHoverChanged: ((Bool) -> Void)?
     var onPin: (() -> Void)?
@@ -12,104 +11,44 @@ struct ClipboardRowView: View {
 
     @State private var thumbnail: NSImage?
     @ObservedObject private var syncService = SyncService.shared
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let cornerRadius: CGFloat = 8
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Button(action: { onActivate?() }) {
                 HStack(spacing: 10) {
                     leadingView
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(clipboardItem.contentPreview)
-                            .font(.callout)
-                            .foregroundStyle(.primary)
+                            .font(.system(size: 13))
+                            .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
                             .lineLimit(2)
                             .truncationMode(.tail)
 
-                        HStack(spacing: 5) {
-                            Text(clipboardItem.sourceApp.isEmpty ? "未知来源" : clipboardItem.sourceApp)
-                            Circle()
-                                .fill(.tertiary)
-                                .frame(width: 2.5, height: 2.5)
-                            Text(clipboardItem.relativeTimeString)
-                        }
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        Text(metadata)
+                            .font(.system(size: 11))
+                            .foregroundStyle(isSelected ? AnyShapeStyle(.white.opacity(0.78)) : AnyShapeStyle(.secondary))
+                            .lineLimit(1)
                     }
 
-                    Spacer(minLength: 4)
+                    Spacer(minLength: 0)
                 }
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
 
-            HStack(spacing: 2) {
-                if clipboardItem.contentType == .text {
-                    rowAction(systemImage: "globe", helpText: "翻译") {
-                        TranslationWindowController.shared.show(text: clipboardItem.content)
-                    }
-                    .opacity(isHovered ? 1 : 0)
-                    .allowsHitTesting(isHovered)
-
-                    syncAction
-                        .opacity(isHovered ? 1 : 0)
-                        .allowsHitTesting(isHovered)
-                }
-
-                rowAction(
-                    systemImage: clipboardItem.isPinned ? "pin.fill" : "pin",
-                    helpText: clipboardItem.isPinned ? "取消置顶" : "置顶",
-                    tint: clipboardItem.isPinned ? .orange : nil
-                ) {
-                    onPin?()
-                }
-                .opacity(clipboardItem.isPinned || isHovered ? 1 : 0)
-                .allowsHitTesting(clipboardItem.isPinned || isHovered)
-
-                rowAction(systemImage: "trash", helpText: "删除", tint: isHovered ? .red : nil) {
-                    onDelete?()
-                }
-                .opacity(isHovered ? 1 : 0)
-                .allowsHitTesting(isHovered)
-            }
-            .frame(minWidth: clipboardItem.contentType == .text ? 96 : 50, alignment: .trailing)
-            .contentShape(.rect)
-            .onHover { hovering in
-                onActionHoverChanged?(hovering)
-            }
+            trailingAccessories
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 9)
-        .padding(.horizontal, 11)
-        .overlay {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(
-                        isKeyboardSelected
-                            ? Color.accentColor.opacity(0.16)
-                            : isHovered ? Color.accentColor.opacity(0.08) : .clear
-                    )
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(
-                        isKeyboardSelected
-                            ? Color.accentColor.opacity(0.72)
-                            : isHovered ? Color.accentColor.opacity(0.34) : .clear,
-                        lineWidth: 1
-                    )
-            }
-            .allowsHitTesting(false)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .background {
+            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                .fill(rowFill)
         }
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.primary.opacity(0.08))
-                .frame(height: 0.5)
-                .padding(.leading, 52)
-        }
-        .contentShape(.rect(cornerRadius: 10))
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isHovered)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isKeyboardSelected)
+        .contentShape(.rect(cornerRadius: Self.cornerRadius))
         .task(id: clipboardItem.id) {
             guard clipboardItem.contentType == .image, let name = clipboardItem.imageName else { return }
             thumbnail = await Task.detached(priority: .utility) {
@@ -117,24 +56,79 @@ struct ClipboardRowView: View {
             }.value
         }
         .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(isKeyboardSelected ? [.isSelected] : [])
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    private var rowFill: Color {
+        if isSelected {
+            return Color(nsColor: .selectedContentBackgroundColor)
+        }
+        return isHovered ? Color.primary.opacity(0.07) : .clear
+    }
+
+    private var metadata: String {
+        let source = clipboardItem.sourceApp.isEmpty ? "未知来源" : clipboardItem.sourceApp
+        return "\(source) · \(clipboardItem.relativeTimeString)"
+    }
+
+    private var accessoryColor: Color {
+        isSelected ? .white.opacity(0.85) : .secondary
+    }
+
+    /// 操作按钮常驻布局、仅切换透明度，悬停时文字不会重新换行。
+    private var trailingAccessories: some View {
+        ZStack(alignment: .trailing) {
+            if clipboardItem.isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(isSelected ? AnyShapeStyle(.white.opacity(0.85)) : AnyShapeStyle(.tertiary))
+                    .rotationEffect(.degrees(45))
+                    .padding(.trailing, 6)
+                    .opacity(isHovered ? 0 : 1)
+                    .accessibilityLabel("已置顶")
+            }
+
+            HStack(spacing: 0) {
+                if clipboardItem.contentType == .text {
+                    rowAction(systemImage: "character.bubble", helpText: "翻译") {
+                        TranslationWindowController.shared.show(text: clipboardItem.content)
+                    }
+                    syncAction
+                }
+
+                rowAction(
+                    systemImage: clipboardItem.isPinned ? "pin.slash" : "pin",
+                    helpText: clipboardItem.isPinned ? "取消置顶" : "置顶"
+                ) {
+                    onPin?()
+                }
+
+                rowAction(systemImage: "trash", helpText: "删除") {
+                    onDelete?()
+                }
+            }
+            .opacity(isHovered ? 1 : 0)
+            .allowsHitTesting(isHovered)
+            .accessibilityHidden(!isHovered)
+            .onHover { hovering in
+                onActionHoverChanged?(hovering)
+            }
+        }
     }
 
     private func rowAction(
         systemImage: String,
         helpText: String,
-        tint: Color? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(tint ?? .secondary)
-                .frame(width: 22, height: 22)
-                .contentShape(.circle)
+                .font(.system(size: 12))
+                .foregroundStyle(accessoryColor)
+                .frame(width: 24, height: 24)
+                .contentShape(.rect)
         }
-        .buttonStyle(.plain)
-        .background(isHovered ? Color.primary.opacity(0.055) : .clear, in: Circle())
+        .buttonStyle(.borderless)
         .help(helpText)
         .accessibilityLabel(helpText)
     }
@@ -155,11 +149,13 @@ struct ClipboardRowView: View {
                 }
             } label: {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
+                    .font(.system(size: 12))
+                    .foregroundStyle(accessoryColor)
+                    .frame(width: 24, height: 24)
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
             .help("选择同步目标")
             .accessibilityLabel("选择同步目标")
         }
@@ -179,14 +175,13 @@ struct ClipboardRowView: View {
 
     private func typeIcon(systemImage: String, tint: Color) -> some View {
         Image(systemName: systemImage)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(tint)
-            .frame(width: 32, height: 32)
-            .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(tint.opacity(0.18), lineWidth: 0.5)
-            }
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(isSelected ? .white : tint)
+            .frame(width: 30, height: 30)
+            .background(
+                isSelected ? Color.white.opacity(0.2) : tint.opacity(0.13),
+                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+            )
             .accessibilityHidden(true)
     }
 
@@ -198,14 +193,18 @@ struct ClipboardRowView: View {
                     .aspectRatio(contentMode: .fill)
             } else {
                 Image(systemName: "photo")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.green)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.green.opacity(0.12))
+                    .background(.green.opacity(0.13))
             }
         }
-        .frame(width: 36, height: 36)
-        .clipShape(.rect(cornerRadius: 9))
+        .frame(width: 30, height: 30)
+        .clipShape(.rect(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+        }
         .accessibilityHidden(true)
     }
 
